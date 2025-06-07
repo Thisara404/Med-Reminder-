@@ -1,5 +1,7 @@
 // filepath: c:\Users\CHAMA COMPUTERS\Downloads\Yashini\website\Backend\src\controllers\authController.js
 const User = require('../model/User');
+const Caregiver = require('../model/Caregiver');
+const Patient = require('../model/Patient');
 const jwt = require('jsonwebtoken');
 
 // Generate JWT Token
@@ -29,6 +31,27 @@ exports.register = async (req, res) => {
       password,
       role
     });
+
+    // Create corresponding profile based on role
+    if (role === 'caregiver') {
+      await Caregiver.create({
+        user: user._id,
+        specialization: 'General Care', // Default value
+        qualifications: [],
+        patients: [],
+        organization: '',
+        position: ''
+      });
+    } else if (role === 'patient') {
+      await Patient.create({
+        user: user._id,
+        dateOfBirth: new Date(), // Default value, should be provided in registration
+        caregivers: [],
+        medications: [],
+        conditions: [],
+        reminders: []
+      });
+    }
 
     if (user) {
       res.status(201).json({

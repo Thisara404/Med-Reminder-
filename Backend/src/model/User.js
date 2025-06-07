@@ -23,6 +23,15 @@ const userSchema = new mongoose.Schema({
     enum: ['patient', 'caregiver'],
     required: true
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'suspended'],
+    default: 'active'
+  },
   createdAt: {
     type: Date,
     default: Date.now

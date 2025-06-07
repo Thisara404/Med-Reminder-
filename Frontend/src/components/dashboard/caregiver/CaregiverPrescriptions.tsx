@@ -1,71 +1,68 @@
-import React, { useState } from 'react';
-import { FileTextIcon, DownloadIcon, UploadIcon, UserIcon, PlusIcon, SearchIcon, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileTextIcon, DownloadIcon, UploadIcon, UserIcon, PlusIcon, SearchIcon, CheckCircleIcon, XCircleIcon, AlertTriangleIcon } from 'lucide-react';
+import { caregiverService } from '../../../services/caregiverService';
+
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+const ErrorMessage = ({ message }: { message: string }) => (
+  <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+    <div className="flex">
+      <div className="flex-shrink-0">
+        <AlertTriangleIcon className="h-5 w-5 text-red-400" />
+      </div>
+      <div className="ml-3">
+        <p className="text-sm text-red-700">{message}</p>
+      </div>
+    </div>
+  </div>
+);
+
 const CaregiverPrescriptions: React.FC = () => {
-  // Mock data for demonstration
-  const [prescriptions, setPrescriptions] = useState([{
-    id: 1,
-    patient: 'Alice Johnson',
-    name: 'Dr. Smith Prescription',
-    doctor: 'Dr. John Smith',
-    date: '2023-03-15',
-    status: 'active',
-    file: 'prescription_001.pdf'
-  }, {
-    id: 2,
-    patient: 'Robert Smith',
-    name: 'Cardiologist Prescription',
-    doctor: 'Dr. Sarah Johnson',
-    date: '2023-02-10',
-    status: 'active',
-    file: 'prescription_002.pdf'
-  }, {
-    id: 3,
-    patient: 'Mary Williams',
-    name: 'General Checkup Results',
-    doctor: 'Dr. Michael Brown',
-    date: '2023-01-05',
-    status: 'expired',
-    file: 'prescription_003.pdf'
-  }, {
-    id: 4,
-    patient: 'Alice Johnson',
-    name: 'Dermatologist Prescription',
-    doctor: 'Dr. Emily Taylor',
-    date: '2023-01-20',
-    status: 'active',
-    file: 'prescription_004.pdf'
-  }]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPatient, setFilterPatient] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const handleFileUpload = () => {
-    // Simulate file upload process
-    setIsUploading(true);
-    setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          // Add a new prescription to the list
-          const newPrescription = {
-            id: prescriptions.length + 1,
-            patient: 'Robert Smith',
-            name: 'New Uploaded Prescription',
-            doctor: 'Dr. Jane Wilson',
-            date: new Date().toISOString().split('T')[0],
-            status: 'active',
-            file: 'new_prescription.pdf'
-          };
-          setPrescriptions([...prescriptions, newPrescription]);
-          return 0;
-        }
-        return prev + 10;
-      });
-    }, 300);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+
+  useEffect(() => {
+    loadPrescriptions();
+  }, []);
+
+  const loadPrescriptions = async () => {
+    try {
+      const data = await caregiverService.getPrescriptions();
+      setPrescriptions(data);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to load prescriptions');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append('prescriptionFile', file);
+      formData.append('patientId', selectedPatient.id);
+
+      const newPrescription = await caregiverService.addPrescription(formData);
+      setPrescriptions([...prescriptions, newPrescription]);
+      setIsUploading(false);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to upload prescription');
+      setIsUploading(false);
+    }
+  };
+
   // Filter prescriptions based on search term, patient filter, and status filter
   const filteredPrescriptions = prescriptions.filter(prescription => {
     const matchesSearch = prescription.name.toLowerCase().includes(searchTerm.toLowerCase()) || prescription.doctor.toLowerCase().includes(searchTerm.toLowerCase()) || prescription.patient.toLowerCase().includes(searchTerm.toLowerCase());
@@ -232,6 +229,8 @@ const CaregiverPrescriptions: React.FC = () => {
           </div>
         </div>
       </div>
+      {loading && <LoadingSpinner />}
+      {error && <ErrorMessage message={error} />}
     </div>;
 };
 export default CaregiverPrescriptions;

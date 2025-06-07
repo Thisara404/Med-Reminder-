@@ -1,8 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClipboardIcon, PlusIcon, UserIcon, CalendarIcon, EditIcon, TrashIcon, SearchIcon, SaveIcon } from 'lucide-react';
+import { caregiverService } from '../../../services/caregiverService';
+
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+const ErrorMessage = ({ message }: {
+  message: string;
+}) => <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+    <div className="flex">
+      <div className="flex-shrink-0">
+        <AlertIcon className="h-5 w-5 text-red-400" />
+      </div>
+      <div className="ml-3">
+        <p className="text-sm text-red-700">{message}</p>
+      </div>
+    </div>
+  </div>;
+
 const CaregiverNotes: React.FC = () => {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [currentNote, setCurrentNote] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPatient, setFilterPatient] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+
   // Mock data for demonstration
-  const [notes, setNotes] = useState([{
+  const sampleNotes = [{
     id: 1,
     patient: 'Alice Johnson',
     title: 'Weekly Check-in',
@@ -30,27 +61,37 @@ const CaregiverNotes: React.FC = () => {
     content: 'Patient reported dizziness after taking evening medication. Monitoring situation and will consult with doctor if symptoms persist.',
     date: '2023-03-08',
     category: 'concern'
-  }]);
-  const [isAddingNote, setIsAddingNote] = useState(false);
-  const [isEditingNote, setIsEditingNote] = useState(false);
-  const [currentNote, setCurrentNote] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterPatient, setFilterPatient] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  }];
+
   // Get unique patients for filter dropdown
   const uniquePatients = Array.from(new Set(notes.map(note => note.patient)));
-  const handleAddNote = () => {
-    setCurrentNote({
-      id: null,
-      patient: '',
-      title: '',
-      content: '',
-      date: new Date().toISOString().split('T')[0],
-      category: 'check-in'
-    });
-    setIsAddingNote(true);
-    setIsEditingNote(false);
+
+  useEffect(() => {
+    // Simulate an API call
+    const fetchData = async () => {
+      try {
+        // Replace with your data fetching logic
+        setNotes(sampleNotes);
+      } catch (error) {
+        console.error('Error fetching notes:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleAddNote = async (noteData: any) => {
+    try {
+      const newNote = await caregiverService.addNote(selectedPatient.id, noteData);
+      setNotes([...notes, newNote]);
+      setIsAddingNote(false);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to add note');
+    }
   };
+
   const handleEditNote = (note: any) => {
     setCurrentNote(note);
     setIsEditingNote(true);
@@ -233,6 +274,8 @@ const CaregiverNotes: React.FC = () => {
               </div>)}
           </div>}
       </div>
+      {loading && <LoadingSpinner />}
+      {error && <ErrorMessage message={error} />}
     </div>;
 };
 export default CaregiverNotes;

@@ -1,50 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserIcon, PillIcon, PhoneIcon, MailIcon, ClipboardCheckIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon } from 'lucide-react';
+import { caregiverService } from '../../../services/caregiverService';
+
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center p-8">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+const ErrorMessage = ({ message }: { message: string }) => (
+  <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+    <div className="flex">
+      <div className="flex-shrink-0">
+        <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14h4v4h-4zm0-8h4v4h-4zm0 8H6a2 2 0 01-2-2v-4a2 2 0 012-2h4v4H6v4h4zm8-4h-4v4h4v-4zm0-8h-4v4h4V6zm0 8h4a2 2 0 002-2v-4a2 2 0 00-2-2h-4v4h4v4h-4z" />
+        </svg>
+      </div>
+      <div className="ml-3">
+        <p className="text-sm text-red-700">{message}</p>
+      </div>
+    </div>
+  </div>
+);
+
 const CaregiverPatients: React.FC = () => {
-  // Mock data for demonstration
-  const [patients, setPatients] = useState([{
-    id: 1,
-    name: 'Alice Johnson',
-    age: 72,
-    email: 'alice.j@example.com',
-    phone: '(555) 123-4567',
-    medications: 5,
-    adherence: 95,
-    conditions: ['Hypertension', 'Type 2 Diabetes'],
-    status: 'stable'
-  }, {
-    id: 2,
-    name: 'Robert Smith',
-    age: 68,
-    email: 'robert.s@example.com',
-    phone: '(555) 987-6543',
-    medications: 3,
-    adherence: 85,
-    conditions: ['Heart Disease', 'Arthritis'],
-    status: 'attention'
-  }, {
-    id: 3,
-    name: 'Mary Williams',
-    age: 75,
-    email: 'mary.w@example.com',
-    phone: '(555) 456-7890',
-    medications: 4,
-    adherence: 100,
-    conditions: ['Osteoporosis', 'COPD'],
-    status: 'stable'
-  }]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  useEffect(() => {
+    loadPatients();
+  }, []);
+
+  const loadPatients = async () => {
+    try {
+      const data = await caregiverService.getPatients();
+      setPatients(data);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to load patients');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddPatient = async (patientData: any) => {
+    try {
+      const newPatient = await caregiverService.addPatient(patientData);
+      setPatients([...patients, newPatient]);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to add patient');
+    }
+  };
+
   const handleViewDetails = (patient: any) => {
     setSelectedPatient(patient);
     setIsViewModalOpen(true);
   };
+
   const closeModal = () => {
     setIsViewModalOpen(false);
     setSelectedPatient(null);
   };
+
   const filteredPatients = patients.filter(patient => patient.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage message={error} />;
+
   return <div>
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -53,7 +78,7 @@ const CaregiverPatients: React.FC = () => {
             Manage and monitor your patients' medication adherence.
           </p>
         </div>
-        <button className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md">
+        <button onClick={() => handleAddPatient({/* patient data */})} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md">
           <PlusIcon size={18} className="mr-1" />
           Add New Patient
         </button>
@@ -243,4 +268,5 @@ const CaregiverPatients: React.FC = () => {
         </div>}
     </div>;
 };
+
 export default CaregiverPatients;

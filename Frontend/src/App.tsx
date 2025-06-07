@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 // Layout components
 import Header from './components/layout/Header';
@@ -18,7 +18,7 @@ import CaregiverDashboard from './pages/dashboard/CaregiverDashboard';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 export function App() {
   return <AuthProvider>
-      <Router>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="flex flex-col min-h-screen bg-gray-50">
           <Header />
           <main className="flex-grow">
@@ -43,6 +43,6 @@ export function App() {
           </main>
           <Footer />
         </div>
-      </Router>
+      </BrowserRouter>
     </AuthProvider>;
 }
