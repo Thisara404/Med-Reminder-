@@ -8,6 +8,9 @@ export interface Patient {
   adherence: number;
   conditions: string[];
   status: 'stable' | 'attention' | 'critical';
+  dateOfBirth?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
 }
 
 export interface Note {
@@ -27,4 +30,12 @@ export interface Prescription {
   date: string;
   status: 'active' | 'expired';
   file: string;
+}
+
+export interface NewPatientData {
+  name: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  conditions?: string[];
 }

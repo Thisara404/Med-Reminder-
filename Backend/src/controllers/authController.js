@@ -81,14 +81,30 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Get additional profile data based on role
+    let profileData = {};
+    if (role === 'caregiver') {
+      const caregiver = await Caregiver.findOne({ user: user._id });
+      if (!caregiver) {
+        // Create caregiver profile if it doesn't exist
+        await Caregiver.create({
+          user: user._id,
+          specialization: 'General Care',
+          patients: []
+        });
+      }
+    }
+
     res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
-      token: generateToken(user._id)
+      token: generateToken(user._id),
+      ...profileData
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

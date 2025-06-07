@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserIcon, PillIcon, PhoneIcon, MailIcon, ClipboardCheckIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon } from 'lucide-react';
 import { caregiverService } from '../../../services/caregiverService';
+import { NewPatientData } from '../../../types';
 
 const LoadingSpinner = () => (
   <div className="flex justify-center items-center p-8">
@@ -23,6 +24,183 @@ const ErrorMessage = ({ message }: { message: string }) => (
   </div>
 );
 
+interface AddPatientFormData {
+  name: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  conditions: string;
+}
+
+interface AddPatientModalProps {
+  onClose: () => void;
+  onSubmit: (data: NewPatientData) => void;
+  onExistingPatientSubmit: (patientId: string) => void;
+}
+
+const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, onExistingPatientSubmit }) => {
+  const [isNewPatient, setIsNewPatient] = useState(true);
+  const [availablePatients, setAvailablePatients] = useState<any[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [formData, setFormData] = useState<AddPatientFormData>({
+    name: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    conditions: ''
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchAvailablePatients = async () => {
+      try {
+        const data = await caregiverService.getAvailablePatients();
+        setAvailablePatients(data);
+      } catch (error) {
+        console.error('Error fetching available patients:', error);
+      }
+    };
+    fetchAvailablePatients();
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isNewPatient) {
+      onSubmit({
+        ...formData,
+        conditions: formData.conditions.split(',').map(c => c.trim()).filter(c => c)
+      });
+    } else {
+      onExistingPatientSubmit(selectedPatientId);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-semibold mb-4">Add Patient</h2>
+        
+        {/* Toggle between new and existing patient */}
+        <div className="flex space-x-4 mb-6">
+          <button
+            className={`px-4 py-2 rounded-md ${
+              isNewPatient ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}
+            onClick={() => setIsNewPatient(true)}
+          >
+            New Patient
+          </button>
+          <button
+            className={`px-4 py-2 rounded-md ${
+              !isNewPatient ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}
+            onClick={() => setIsNewPatient(false)}
+          >
+            Existing Patient
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          {isNewPatient ? (
+            // New patient form
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <input
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.dateOfBirth}
+                  onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Medical Conditions (comma-separated)</label>
+                <input
+                  type="text"
+                  value={formData.conditions}
+                  onChange={(e) => setFormData({...formData, conditions: e.target.value})}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="e.g., Diabetes, Hypertension"
+                />
+              </div>
+            </div>
+          ) : (
+            // Existing patient selection
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Patient
+                </label>
+                <select
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select a patient...</option>
+                  {availablePatients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} ({patient.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              disabled={loading}
+            >
+              {loading ? 'Adding...' : 'Add Patient'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const CaregiverPatients: React.FC = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +208,8 @@ const CaregiverPatients: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     loadPatients();
@@ -46,10 +226,21 @@ const CaregiverPatients: React.FC = () => {
     }
   };
 
-  const handleAddPatient = async (patientData: any) => {
+  const handleAddPatient = async (patientData: NewPatientData) => {
     try {
       const newPatient = await caregiverService.addPatient(patientData);
       setPatients([...patients, newPatient]);
+      setIsAddModalOpen(false);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to add patient');
+    }
+  };
+
+  const handleAddExistingPatient = async (patientId: string) => {
+    try {
+      const newPatient = await caregiverService.addExistingPatient(patientId);
+      setPatients([...patients, newPatient]);
+      setIsAddModalOpen(false);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to add patient');
     }
@@ -65,12 +256,79 @@ const CaregiverPatients: React.FC = () => {
     setSelectedPatient(null);
   };
 
-  const filteredPatients = patients.filter(patient => patient.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const searchInPatient = (patient: any, searchTerm: string): boolean => {
+    const searchValue = searchTerm.toLowerCase();
+    const searchableFields = [
+      patient.name,
+      patient.email,
+      patient.phone,
+      patient.age?.toString(),
+      patient.id,
+      patient.status,
+      ...(patient.conditions || []),
+      patient.emergencyContact,
+      patient.emergencyPhone
+    ];
+
+    return searchableFields.some(field => 
+      field?.toLowerCase().includes(searchValue)
+    );
+  };
+
+  // Enhanced search function
+  const filteredPatients = patients.filter(patient => {
+    if (!patient) return false;
+    
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      // Search by name
+      (patient.name?.toLowerCase().includes(searchTermLower)) ||
+      // Search by email
+      (patient.email?.toLowerCase().includes(searchTermLower)) ||
+      // Search by phone
+      (patient.phone?.toLowerCase().includes(searchTermLower)) ||
+      // Search by age
+      (patient.age?.toString().includes(searchTerm)) ||
+      // Search by conditions
+      (patient.conditions?.some(condition => 
+        condition.toLowerCase().includes(searchTermLower)
+      )) ||
+      // Search by status
+      (patient.status?.toLowerCase().includes(searchTermLower)) ||
+      // Search by ID
+      (patient.id?.toLowerCase().includes(searchTermLower))
+    );
+  });
+
+  const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Generate search suggestions
+    if (value.length > 1) {
+      const suggestions = patients
+        .flatMap(patient => [
+          patient.name,
+          patient.email,
+          ...(patient.conditions || [])
+        ])
+        .filter((item): item is string => !!item)
+        .filter(item => 
+          item.toLowerCase().includes(value.toLowerCase())
+        )
+        .slice(0, 5);
+      
+      setSearchSuggestions([...new Set(suggestions)]);
+    } else {
+      setSearchSuggestions([]);
+    }
+  };
 
   if (loading) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} />;
 
-  return <div>
+  return (
+    <div>
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">My Patients</h1>
@@ -78,21 +336,48 @@ const CaregiverPatients: React.FC = () => {
             Manage and monitor your patients' medication adherence.
           </p>
         </div>
-        <button onClick={() => handleAddPatient({/* patient data */})} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md">
+        <button 
+          onClick={() => setIsAddModalOpen(true)} 
+          className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
+        >
           <PlusIcon size={18} className="mr-1" />
           Add New Patient
         </button>
       </div>
-      {/* Search and Filter */}
+
+      {/* Enhanced Search Bar */}
       <div className="mb-6">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <SearchIcon size={18} className="text-gray-400" />
           </div>
-          <input type="text" placeholder="Search patients..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:ring-blue-500 focus:border-blue-500" />
+          <input 
+            type="text" 
+            placeholder="Search patients by name, email, phone, age, conditions..." 
+            value={searchTerm} 
+            onChange={handleSearchInput}
+            className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+          />
+          {searchSuggestions.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+              {searchSuggestions.map((suggestion, index) => (
+                <div
+                  key={index}
+                  className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    setSearchTerm(suggestion);
+                    setSearchSuggestions([]);
+                  }}
+                >
+                  {suggestion}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      {/* Patients List */}
+
+      {/* Patients Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -115,7 +400,8 @@ const CaregiverPatients: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredPatients.map(patient => <tr key={patient.id}>
+            {filteredPatients.map(patient => (
+              <tr key={patient.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="bg-blue-100 p-2 rounded-full mr-3">
@@ -175,10 +461,18 @@ const CaregiverPatients: React.FC = () => {
                     </button>
                   </div>
                 </td>
-              </tr>)}
+              </tr>
+            ))}
           </tbody>
         </table>
+
+        {filteredPatients.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            No patients found matching your search criteria.
+          </div>
+        )}
       </div>
+
       {/* Patient Detail Modal */}
       {isViewModalOpen && selectedPatient && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
@@ -266,7 +560,16 @@ const CaregiverPatients: React.FC = () => {
             </div>
           </div>
         </div>}
-    </div>;
+      {/* Add Patient Modal */}
+      {isAddModalOpen && (
+        <AddPatientModal
+          onClose={() => setIsAddModalOpen(false)}
+          onSubmit={handleAddPatient}
+          onExistingPatientSubmit={handleAddExistingPatient}
+        />
+      )}
+    </div>
+  );
 };
 
 export default CaregiverPatients;

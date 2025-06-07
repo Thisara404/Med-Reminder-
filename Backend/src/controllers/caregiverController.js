@@ -1,6 +1,7 @@
 const Caregiver = require('../model/Caregiver');
 const Patient = require('../model/Patient');
 const Prescription = require('../model/Prescription');
+const Medication = require('../model/Medication'); // Add this import
 const User = require('../model/User');
 
 // Get caregiver profile with patients
@@ -20,7 +21,6 @@ exports.getProfile = async (req, res) => {
 // Get all patients for a caregiver
 exports.getPatients = async (req, res) => {
   try {
-    // First, find the caregiver document
     let caregiver = await Caregiver.findOne({ user: req.user.id });
     
     if (!caregiver) {
@@ -32,17 +32,26 @@ exports.getPatients = async (req, res) => {
       });
     }
 
-    // Get patients with their user details
+    // Send empty array if no patients yet
+    if (!caregiver.patients || caregiver.patients.length === 0) {
+      return res.json([]);
+    }
+
     const patientsWithDetails = await Promise.all(
       caregiver.patients.map(async (patientId) => {
-        const patient = await Patient.findById(patientId).populate('user', 'name email');
-        const medications = await Prescription.countDocuments({ patient: patientId });
+        const patient = await Patient.findById(patientId)
+          .populate('user', 'name email');
+        
+        if (!patient || !patient.user) return null;
+
+        const medications = await Medication.countDocuments({ patient: patientId });
         const adherenceStats = await getPatientAdherence(patientId);
         
         return {
           id: patient._id,
-          name: patient.user.name,
-          email: patient.user.email,
+          name: patient.user.name || 'Unknown',
+          email: patient.user.email || '',
+          phone: patient.phone || '',
           age: calculateAge(patient.dateOfBirth),
           medications,
           adherence: adherenceStats.rate,
@@ -52,8 +61,12 @@ exports.getPatients = async (req, res) => {
       })
     );
 
-    res.json(patientsWithDetails);
+    // Filter out any null values from deleted patients
+    const validPatients = patientsWithDetails.filter(p => p !== null);
+    res.json(validPatients);
+
   } catch (error) {
+    console.error('Error in getPatients:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -142,28 +155,29 @@ exports.getPrescriptions = async (req, res) => {
   try {
     const caregiver = await Caregiver.findOne({ user: req.user.id });
     if (!caregiver) {
-      return res.status(404).json({ message: 'Caregiver not found' });
+      return res.json([]); // Return empty array if no caregiver profile
     }
 
     const prescriptions = await Prescription.find({
       patient: { $in: caregiver.patients }
     })
     .populate('patient', 'user')
-    .populate('prescribedBy', 'name')
+    .populate('uploadedBy', 'name')
     .sort('-createdAt');
 
     const formattedPrescriptions = prescriptions.map(p => ({
       id: p._id,
-      name: p.name,
-      patient: p.patient.user.name,
-      doctor: p.prescribedBy.name,
+      name: p.name || 'Prescription',
+      patient: p.patient?.user?.name || 'Unknown Patient',
+      doctor: p.doctor?.name || 'Unknown Doctor',
       date: p.createdAt,
       status: p.status,
-      file: p.prescriptionFile.filename
+      file: p.prescriptionFile?.filename
     }));
 
     res.json(formattedPrescriptions);
   } catch (error) {
+    console.error('Error in getPrescriptions:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -272,6 +286,120 @@ exports.deletePatientNote = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
+};
+
+// Add patient
+exports.addPatient = async (req, res) => {
+  try {
+    const { name, email, phone, dateOfBirth, conditions } = req.body;
+
+    // Create user account for patient
+    const patientUser = await User.create({
+      name,
+      email,
+      // Generate a temporary password that patient can change later
+      password: Math.random().toString(36).slice(-8),
+      role: 'patient'
+    });
+
+    // Create patient profile
+    const patient = await Patient.create({
+      user: patientUser._id,
+      dateOfBirth,
+      phone,
+      conditions: conditions || [],
+      caregivers: [req.user.id]
+    });
+
+    // Add patient to caregiver's patients list
+    await Caregiver.findOneAndUpdate(
+      { user: req.user.id },
+      { $addToSet: { patients: patient._id } }
+    );
+
+    // Get full patient details
+    const fullPatient = await Patient.findById(patient._id)
+      .populate('user', 'name email');
+
+    res.status(201).json({
+      id: patient._id,
+      name: patientUser.name,
+      email: patientUser.email,
+      phone: patient.phone,
+      dateOfBirth: patient.dateOfBirth,
+      conditions: patient.conditions,
+      medications: 0,
+      adherence: 100,
+      status: 'stable'
+    });
+
+  } catch (error) {
+    console.error('Error adding patient:', error);
+    res.status(500).json({ 
+      message: 'Failed to add patient', 
+      error: error.message 
+    });
+  }
+};
+
+// Get available patients (not assigned to this caregiver)
+exports.getAvailablePatients = async (req, res) => {
+  try {
+    const caregiver = await Caregiver.findOne({ user: req.user.id });
+    
+    // Find patients not assigned to this caregiver
+    const patients = await Patient.find({
+      _id: { $nin: caregiver.patients }
+    }).populate('user', 'name email');
+
+    const availablePatients = patients.map(patient => ({
+      id: patient._id,
+      name: patient.user.name,
+      email: patient.user.email
+    }));
+
+    res.json(availablePatients);
+  } catch (error) {
+    console.error('Error getting available patients:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Add existing patient to caregiver
+exports.addExistingPatient = async (req, res) => {
+  try {
+    const { patientId } = req.body;
+    
+    // Add patient to caregiver's list
+    const caregiver = await Caregiver.findOneAndUpdate(
+      { user: req.user.id },
+      { $addToSet: { patients: patientId } },
+      { new: true }
+    );
+
+    // Add caregiver to patient's list
+    await Patient.findByIdAndUpdate(
+      patientId,
+      { $addToSet: { caregivers: caregiver._id } }
+    );
+
+    // Get patient details
+    const patient = await Patient.findById(patientId)
+      .populate('user', 'name email');
+
+    res.json({
+      id: patient._id,
+      name: patient.user.name,
+      email: patient.user.email,
+      conditions: patient.conditions,
+      medications: 0,
+      adherence: 100,
+      status: 'stable'
+    });
+  } catch (error) {
+    console.error('Error adding existing patient:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 };
 
 // Helper functions

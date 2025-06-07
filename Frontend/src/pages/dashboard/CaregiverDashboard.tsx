@@ -7,6 +7,7 @@ import CaregiverPatients from '../../components/dashboard/caregiver/CaregiverPat
 import CaregiverPrescriptions from '../../components/dashboard/caregiver/CaregiverPrescriptions';
 import CaregiverNotes from '../../components/dashboard/caregiver/CaregiverNotes';
 import CaregiverSettings from '../../components/dashboard/caregiver/CaregiverSettings';
+import ErrorBoundary from '../../components/ErrorBoundary';
 const CaregiverDashboard: React.FC = () => {
   const {
     user
@@ -70,7 +71,11 @@ const CaregiverDashboard: React.FC = () => {
         <div className="flex-grow p-6">
           <Routes>
             <Route path="/" element={<CaregiverOverview />} />
-            <Route path="/patients" element={<CaregiverPatients />} />
+            <Route path="/patients" element={
+              <ErrorBoundary>
+                <CaregiverPatients />
+              </ErrorBoundary>
+            } />
             <Route path="/prescriptions" element={<CaregiverPrescriptions />} />
             <Route path="/notes" element={<CaregiverNotes />} />
             <Route path="/settings" element={<CaregiverSettings />} />

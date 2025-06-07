@@ -15,7 +15,9 @@ const {
     deletePrescription,
     getPatientNotes,
     updatePatientNote,
-    deletePatientNote
+    deletePatientNote,
+    getAvailablePatients,
+    addExistingPatient
 } = require('../controllers/caregiverController');
 
 // Patient routes
@@ -36,5 +38,9 @@ router.get('/patients/:patientId/notes', protect, authorize('caregiver'), getPat
 router.post('/patients/notes', protect, authorize('caregiver'), addPatientNote);
 router.put('/patients/notes/:noteId', protect, authorize('caregiver'), updatePatientNote);
 router.delete('/patients/notes/:noteId', protect, authorize('caregiver'), deletePatientNote);
+
+// Add these routes
+router.get('/available-patients', protect, authorize('caregiver'), getAvailablePatients);
+router.post('/patients/add-existing', protect, authorize('caregiver'), addExistingPatient);
 
 module.exports = router;

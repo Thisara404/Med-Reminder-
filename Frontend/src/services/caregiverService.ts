@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { NewPatientData } from '../types';
 
 const API_URL = 'http://localhost:5000/api/caregiver';
 
@@ -11,13 +12,23 @@ export const caregiverService = {
 
   // Patients
   getPatients: async () => {
-    const response = await axios.get(`${API_URL}/patients`);
-    return response.data;
+    try {
+      const response = await axios.get(`${API_URL}/patients`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      throw error;
+    }
   },
 
-  addPatient: async (patientData: any) => {
-    const response = await axios.post(`${API_URL}/patients`, patientData);
-    return response.data;
+  addPatient: async (patientData: NewPatientData) => {
+    try {
+      const response = await axios.post(`${API_URL}/patients`, patientData);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding patient:', error);
+      throw error;
+    }
   },
 
   updatePatient: async (patientId: string, updates: any) => {
@@ -28,6 +39,28 @@ export const caregiverService = {
   deletePatient: async (patientId: string) => {
     const response = await axios.delete(`${API_URL}/patients/${patientId}`);
     return response.data;
+  },
+
+  // Get available patients that can be added
+  getAvailablePatients: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/available-patients`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching available patients:', error);
+      throw error;
+    }
+  },
+
+  // Add existing patient to caregiver
+  addExistingPatient: async (patientId: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/patients/add-existing`, { patientId });
+      return response.data;
+    } catch (error) {
+      console.error('Error adding existing patient:', error);
+      throw error;
+    }
   },
 
   // Notes
@@ -56,8 +89,13 @@ export const caregiverService = {
 
   // Prescriptions
   getPrescriptions: async () => {
-    const response = await axios.get(`${API_URL}/prescriptions`);
-    return response.data;
+    try {
+      const response = await axios.get(`${API_URL}/prescriptions`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching prescriptions:', error);
+      throw error;
+    }
   },
 
   addPrescription: async (prescriptionData: FormData) => {
