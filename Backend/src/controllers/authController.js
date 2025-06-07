@@ -77,16 +77,32 @@ exports.login = async (req, res) => {
     // Find user by email
     const user = await User.findOne({ email });
 
-    if (!user || !(await user.matchPassword(password)) || user.role !== role) {
+    if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if user is admin
+    if (user.isAdmin) {
+      return res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: 'admin',
+        isAdmin: true,
+        token: generateToken(user._id)
+      });
+    }
+
+    // For non-admin users, verify role matches
+    if (role && user.role !== role) {
+      return res.status(401).json({ message: 'Invalid role' });
     }
 
     // Get additional profile data based on role
     let profileData = {};
-    if (role === 'caregiver') {
+    if (user.role === 'caregiver') {
       const caregiver = await Caregiver.findOne({ user: user._id });
       if (!caregiver) {
-        // Create caregiver profile if it doesn't exist
         await Caregiver.create({
           user: user._id,
           specialization: 'General Care',
@@ -100,6 +116,7 @@ exports.login = async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      isAdmin: false,
       token: generateToken(user._id),
       ...profileData
     });

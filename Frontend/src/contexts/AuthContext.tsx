@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return config;
   });
 
-  const login = async (email: string, password: string, role: UserRole) => {
+  const login = async (email: string, password: string, role?: string) => {
     try {
       const response = await axios.post('/auth/login', { email, password, role });
       const userData = {
@@ -57,10 +57,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: response.data.name,
         email: response.data.email,
         role: response.data.role,
+        isAdmin: response.data.isAdmin,
         token: response.data.token
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
+      return userData;
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Login failed');
     }

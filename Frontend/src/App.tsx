@@ -14,6 +14,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 // Dashboard pages
 import PatientDashboard from './pages/dashboard/PatientDashboard';
 import CaregiverDashboard from './pages/dashboard/CaregiverDashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
 // Protected route component
 import ProtectedRoute from './components/auth/ProtectedRoute';
 export function App() {
@@ -36,6 +37,9 @@ export function App() {
                   </ProtectedRoute>} />
               <Route path="/caregiver-dashboard/*" element={<ProtectedRoute requiredRole="caregiver">
                     <CaregiverDashboard />
+                  </ProtectedRoute>} />
+              <Route path="/admin-dashboard/*" element={<ProtectedRoute requiredRole="admin">
+                    <AdminDashboard />
                   </ProtectedRoute>} />
               {/* Fallback route */}
               <Route path="*" element={<Navigate to="/" />} />

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserIcon, LockIcon, LogInIcon } from 'lucide-react';
+import { UserIcon, LockIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'patient' | 'caregiver'>('patient');
+  const [role, setRole] = useState<'patient' | 'caregiver' | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -18,15 +19,25 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password, role);
-      navigate(role === 'patient' ? '/patient-dashboard' : '/caregiver-dashboard');
+      const response = await login(email, password, role);
+      // Check if user is admin and handle navigation
+      if (response.isAdmin) {
+        navigate('/admin-dashboard');
+      } else {
+        navigate(role === 'patient' ? '/patient-dashboard' : '/caregiver-dashboard');
+      }
     } catch (err) {
       setError(err.message || 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }
   };
-  return <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+
+  // Only show role selection if not an admin email
+  const isAdminEmail = email.includes('admin'); // You can modify this check based on your admin email pattern
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full mx-auto">
         <div className="text-center">
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
@@ -75,25 +86,51 @@ const LoginPage: React.FC = () => {
                 <input id="password" name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md" />
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                I am a:
-              </label>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <div className={`border rounded-md py-3 px-4 flex items-center justify-center cursor-pointer ${role === 'patient' ? 'bg-blue-50 border-blue-500' : 'border-gray-300'}`} onClick={() => setRole('patient')}>
-                  <input type="radio" name="role" value="patient" checked={role === 'patient'} onChange={() => setRole('patient')} className="sr-only" />
-                  <span className={`${role === 'patient' ? 'text-blue-700' : 'text-gray-700'}`}>
-                    Patient
-                  </span>
-                </div>
-                <div className={`border rounded-md py-3 px-4 flex items-center justify-center cursor-pointer ${role === 'caregiver' ? 'bg-blue-50 border-blue-500' : 'border-gray-300'}`} onClick={() => setRole('caregiver')}>
-                  <input type="radio" name="role" value="caregiver" checked={role === 'caregiver'} onChange={() => setRole('caregiver')} className="sr-only" />
-                  <span className={`${role === 'caregiver' ? 'text-blue-700' : 'text-gray-700'}`}>
-                    Caregiver
-                  </span>
+            {!isAdminEmail && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  I am a:
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <div 
+                    className={`border rounded-md py-3 px-4 flex items-center justify-center cursor-pointer ${
+                      role === 'patient' ? 'bg-blue-50 border-blue-500' : 'border-gray-300'
+                    }`} 
+                    onClick={() => setRole('patient')}
+                  >
+                    <input 
+                      type="radio" 
+                      name="role" 
+                      value="patient" 
+                      checked={role === 'patient'} 
+                      onChange={() => setRole('patient')} 
+                      className="sr-only" 
+                    />
+                    <span className={role === 'patient' ? 'text-blue-700' : 'text-gray-700'}>
+                      Patient
+                    </span>
+                  </div>
+                  <div 
+                    className={`border rounded-md py-3 px-4 flex items-center justify-center cursor-pointer ${
+                      role === 'caregiver' ? 'bg-blue-50 border-blue-500' : 'border-gray-300'
+                    }`} 
+                    onClick={() => setRole('caregiver')}
+                  >
+                    <input 
+                      type="radio" 
+                      name="role" 
+                      value="caregiver" 
+                      checked={role === 'caregiver'} 
+                      onChange={() => setRole('caregiver')} 
+                      className="sr-only" 
+                    />
+                    <span className={role === 'caregiver' ? 'text-blue-700' : 'text-gray-700'}>
+                      Caregiver
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
@@ -125,6 +162,8 @@ const LoginPage: React.FC = () => {
           </form>
         </div>
       </div>
-    </div>;
+    </div>
+  );
 };
+
 export default LoginPage;
