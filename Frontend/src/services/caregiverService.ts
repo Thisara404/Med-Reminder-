@@ -149,7 +149,8 @@ export const caregiverService = {
   // Extract medications from prescription
   extractMedications: async (prescriptionId: string) => {
     try {
-      const response = await axios.post(`${API_URL}/prescriptions/${prescriptionId}/extract`);
+      // Use the absolute URL with the correct API path
+      const response = await axios.post(`http://localhost:5000/api/prescriptions/${prescriptionId}/extract`);
       return response.data;
     } catch (error) {
       console.error('Error extracting medications:', error);
@@ -158,9 +159,11 @@ export const caregiverService = {
   },
 
   // Medications
+  // Get patient medications
   getPatientMedications: async (patientId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/patients/${patientId}/medications`);
+      const response = await axios.get(`${API_URL.replace('/caregiver', '')}/patients/${patientId}/medications`);
+      console.log('Medication API response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching patient medications:', error);
@@ -168,9 +171,10 @@ export const caregiverService = {
     }
   },
 
+  // Add medication
   addMedication: async (patientId: string, medicationData: any) => {
     try {
-      const response = await axios.post(`${API_URL}/patients/${patientId}/medications`, medicationData);
+      const response = await axios.post(`${API_URL.replace('/caregiver', '')}/patients/${patientId}/medications`, medicationData);
       return response.data;
     } catch (error) {
       console.error('Error adding medication:', error);
@@ -178,19 +182,10 @@ export const caregiverService = {
     }
   },
 
-  updateMedication: async (patientId: string, medicationId: string, updates: any) => {
+  // Delete medication
+  deleteMedication: async (medicationId: string) => {
     try {
-      const response = await axios.put(`${API_URL}/patients/${patientId}/medications/${medicationId}`, updates);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating medication:', error);
-      throw error;
-    }
-  },
-
-  deleteMedication: async (patientId: string, medicationId: string) => {
-    try {
-      const response = await axios.delete(`${API_URL}/patients/${patientId}/medications/${medicationId}`);
+      const response = await axios.delete(`${API_URL.replace('/caregiver', '')}/medications/${medicationId}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting medication:', error);

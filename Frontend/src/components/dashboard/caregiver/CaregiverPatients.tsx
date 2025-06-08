@@ -376,7 +376,9 @@ const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }
       setLoading(true);
       setError('');
       try {
+        // Load medications for this patient
         const data = await caregiverService.getPatientMedications(patientId);
+        console.log('Patient medications loaded:', data);
         setMedications(data);
       } catch (error: any) {
         setError(error.response?.data?.message || 'Failed to load medications');
@@ -462,58 +464,79 @@ const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }
           placeholder="Add new medication"
         />
         <button
-          onClick={isEditMode ? handleUpdateMedication : handleAddMedication}
-          disabled={loading}
+          onClick={handleAddMedication}
+          disabled={loading || !newMedication}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
         >
-          {loading ? (isEditMode ? 'Updating...' : 'Adding...') : (isEditMode ? 'Update Medication' : 'Add Medication')}
+          {loading ? 'Adding...' : 'Add Medication'}
         </button>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Medication
-              </th>
-              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {medications.map(medication => (
-              <tr key={medication.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">
-                    {medication.name}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex justify-end space-x-2">
-                    <button 
-                      onClick={() => handleEditMedication(medication)}
-                      className="text-gray-600 hover:text-gray-800" 
-                      title="Edit Medication"
-                    >
-                      <EditIcon size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteMedication(medication.id)}
-                      className="text-red-600 hover:text-red-800" 
-                      title="Delete Medication"
-                    >
-                      <TrashIcon size={18} />
-                    </button>
-                  </div>
-                </td>
+        {loading ? (
+          <div className="text-center p-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading medications...</p>
+          </div>
+        ) : medications.length > 0 ? (
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Medication
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Dosage
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Frequency
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {medications.length === 0 && (
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {medications.map(medication => (
+                <tr key={medication.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {medication.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {medication.dosage || 'Not specified'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {medication.frequency || 'Once daily'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-2">
+                      <button 
+                        onClick={() => handleEditMedication(medication)}
+                        className="text-gray-600 hover:text-gray-800" 
+                        title="Edit Medication"
+                      >
+                        <EditIcon size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteMedication(medication.id)}
+                        className="text-red-600 hover:text-red-800" 
+                        title="Delete Medication"
+                      >
+                        <TrashIcon size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
           <div className="text-center py-12">
             <PillIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No medications found</h3>

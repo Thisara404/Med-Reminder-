@@ -204,7 +204,9 @@ const CaregiverPrescriptions: React.FC = () => {
       setLoading(true);
       setError('');
       
+      console.log(`Extracting medications for prescription: ${prescriptionId}`);
       const response = await caregiverService.extractMedications(prescriptionId);
+      console.log('Extraction response:', response);
       
       // Update the prescription with extracted medications
       setPrescriptions(prev => 
@@ -221,10 +223,17 @@ const CaregiverPrescriptions: React.FC = () => {
         });
       }
       
-      alert('Medications extracted successfully!');
+      // Display a success message with the number of medications extracted
+      const medicationCount = response.medications.length;
+      alert(`Success! ${medicationCount} medication${medicationCount !== 1 ? 's' : ''} extracted from the prescription.`);
     } catch (error: any) {
       console.error('Error extracting medications:', error);
-      setError(error.response?.data?.message || 'Failed to extract medications');
+      let errorMsg = 'Failed to extract medications';
+      if (error.response) {
+        errorMsg = error.response.data?.message || errorMsg;
+      }
+      setError(errorMsg);
+      alert(`Error: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -546,7 +555,7 @@ const CaregiverPrescriptions: React.FC = () => {
       {/* Details Modal */}
       {isDetailsModalOpen && selectedPrescription && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-gray-900">
                 Prescription Details
@@ -628,33 +637,47 @@ const CaregiverPrescriptions: React.FC = () => {
               </div>
 
               {/* Medications */}
-              {selectedPrescription.medications && selectedPrescription.medications.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Medications</h3>
-                  <div className="space-y-3">
-                    {selectedPrescription.medications.map((medication, index) => (
-                      <div key={index} className="flex items-center bg-white rounded-lg p-3">
-                        <PillIcon size={16} className="text-blue-600 mr-3" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">
-                            {medication.name || `Medication ${index + 1}`}
-                          </p>
-                          {medication.dosage && (
-                            <p className="text-xs text-gray-500">Dosage: {medication.dosage}</p>
-                          )}
-                          {medication.frequency && (
-                            <p className="text-xs text-gray-500">Frequency: {medication.frequency}</p>
-                          )}
-                          {medication.instructions && (
-                            <p className="text-xs text-gray-500">Instructions: {medication.instructions}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              {selectedPrescription.medications && selectedPrescription.medications.length > 0 ? (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-3">Extracted Medications</h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dosage</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
+                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Instructions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {selectedPrescription.medications.map((med, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{med.name}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{med.dosage}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{med.frequency}</td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{med.instructions}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
+              ) : (
+                <div className="mt-6">
+                  <p className="text-gray-500 italic">No medications have been extracted from this prescription yet.</p>
+                  {selectedPrescription.file && (
+                    <button
+                      onClick={() => handleExtractMedications(selectedPrescription.id)}
+                      className="mt-2 inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                    >
+                      <SearchIcon size={16} className="mr-1" />
+                      Extract Medications
+                    </button>
+                  )}
+                </div>
               )}
-
+              
               {/* Notes */}
               {selectedPrescription.notes && (
                 <div className="bg-gray-50 rounded-lg p-4">

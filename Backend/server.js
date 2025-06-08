@@ -25,9 +25,9 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/caregiver', caregiverRoutes);
 app.use('/api/patient', patientRoutes);
-app.use('/api/caregiver', medicationRoutes);
+app.use('/api', medicationRoutes);
 app.use('/api', reminderRoutes);
-app.use('/api/caregiver/prescriptions', prescriptionRoutes); // Mount prescription routes correctly
+app.use('/api/prescriptions', prescriptionRoutes); // Changed to /api/prescriptions
 app.use('/api', noteRoutes);
 app.use('/api/admin', adminRoutes);
 
