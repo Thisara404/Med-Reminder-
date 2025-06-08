@@ -361,6 +361,172 @@ const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, onClose, o
   );
 };
 
+// Patient Medication Manager Component
+const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }) => {
+  const [medications, setMedications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [newMedication, setNewMedication] = useState('');
+  const [editingMedication, setEditingMedication] = useState<any>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  useEffect(() => {
+    const fetchMedications = async () => {
+      if (!patientId) return;
+      setLoading(true);
+      setError('');
+      try {
+        const data = await caregiverService.getPatientMedications(patientId);
+        setMedications(data);
+      } catch (error: any) {
+        setError(error.response?.data?.message || 'Failed to load medications');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMedications();
+  }, [patientId]);
+
+  const handleAddMedication = async () => {
+    if (!newMedication) return;
+    setLoading(true);
+    setError('');
+    try {
+      // Make sure to pass patientId as first parameter, not in the medicationData
+      const addedMedication = await caregiverService.addMedication(patientId, { 
+        name: newMedication,
+        dosage: '',
+        frequency: 'Once daily',
+        instructions: '',
+        status: 'active'
+      });
+      setMedications([...medications, addedMedication]);
+      setNewMedication('');
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to add medication');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditMedication = (medication: any) => {
+    setEditingMedication(medication);
+    setNewMedication(medication.name);
+    setIsEditMode(true);
+  };
+
+  const handleUpdateMedication = async () => {
+    if (!editingMedication || !newMedication) return;
+    setLoading(true);
+    setError('');
+    try {
+      const updatedMedication = { ...editingMedication, name: newMedication };
+      await caregiverService.updateMedication(updatedMedication.id, updatedMedication);
+      setMedications(medications.map(med => med.id === updatedMedication.id ? updatedMedication : med));
+      setNewMedication('');
+      setIsEditMode(false);
+      setEditingMedication(null);
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to update medication');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteMedication = async (medicationId: string) => {
+    if (window.confirm('Are you sure you want to delete this medication?')) {
+      setLoading(true);
+      setError('');
+      try {
+        await caregiverService.deleteMedication(medicationId);
+        setMedications(medications.filter(med => med.id !== medicationId));
+      } catch (error: any) {
+        setError(error.response?.data?.message || 'Failed to delete medication');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      <h3 className="text-lg font-semibold mb-4">Medications</h3>
+      {error && <ErrorMessage message={error} />}
+      
+      <div className="flex space-x-3 mb-4">
+        <input
+          type="text"
+          value={newMedication}
+          onChange={(e) => setNewMedication(e.target.value)}
+          className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-3 py-2"
+          placeholder="Add new medication"
+        />
+        <button
+          onClick={isEditMode ? handleUpdateMedication : handleAddMedication}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? (isEditMode ? 'Updating...' : 'Adding...') : (isEditMode ? 'Update Medication' : 'Add Medication')}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Medication
+              </th>
+              <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {medications.map(medication => (
+              <tr key={medication.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    {medication.name}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <div className="flex justify-end space-x-2">
+                    <button 
+                      onClick={() => handleEditMedication(medication)}
+                      className="text-gray-600 hover:text-gray-800" 
+                      title="Edit Medication"
+                    >
+                      <EditIcon size={18} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteMedication(medication.id)}
+                      className="text-red-600 hover:text-red-800" 
+                      title="Delete Medication"
+                    >
+                      <TrashIcon size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {medications.length === 0 && (
+          <div className="text-center py-12">
+            <PillIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No medications found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Add medications to manage your patient's treatment.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Main CaregiverPatients Component
 const CaregiverPatients: React.FC = () => {
   const [patients, setPatients] = useState<any[]>([]);
@@ -781,6 +947,9 @@ const CaregiverPatients: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Patient Medication Manager */}
+              <PatientMedicationManager patientId={selectedPatient.id} />
             </div>
             <div className="mt-6 flex justify-end space-x-3">
               <button 

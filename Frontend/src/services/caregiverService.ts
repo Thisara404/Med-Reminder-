@@ -146,25 +146,56 @@ export const caregiverService = {
     }
   },
 
+  // Extract medications from prescription
+  extractMedications: async (prescriptionId: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/prescriptions/${prescriptionId}/extract`);
+      return response.data;
+    } catch (error) {
+      console.error('Error extracting medications:', error);
+      throw error;
+    }
+  },
+
   // Medications
   getPatientMedications: async (patientId: string) => {
-    const response = await axios.get(`${API_URL}/patients/${patientId}/medications`);
-    return response.data;
+    try {
+      const response = await axios.get(`${API_URL}/patients/${patientId}/medications`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching patient medications:', error);
+      throw error;
+    }
   },
 
   addMedication: async (patientId: string, medicationData: any) => {
-    const response = await axios.post(`${API_URL}/patients/${patientId}/medications`, medicationData);
-    return response.data;
+    try {
+      const response = await axios.post(`${API_URL}/patients/${patientId}/medications`, medicationData);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding medication:', error);
+      throw error;
+    }
   },
 
   updateMedication: async (patientId: string, medicationId: string, updates: any) => {
-    const response = await axios.put(`${API_URL}/patients/${patientId}/medications/${medicationId}`, updates);
-    return response.data;
+    try {
+      const response = await axios.put(`${API_URL}/patients/${patientId}/medications/${medicationId}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating medication:', error);
+      throw error;
+    }
   },
 
   deleteMedication: async (patientId: string, medicationId: string) => {
-    const response = await axios.delete(`${API_URL}/patients/${patientId}/medications/${medicationId}`);
-    return response.data;
+    try {
+      const response = await axios.delete(`${API_URL}/patients/${patientId}/medications/${medicationId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting medication:', error);
+      throw error;
+    }
   },
 
   // Reminders

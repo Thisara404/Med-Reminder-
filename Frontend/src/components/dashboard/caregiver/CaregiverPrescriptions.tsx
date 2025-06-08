@@ -199,6 +199,37 @@ const CaregiverPrescriptions: React.FC = () => {
     }
   };
 
+  const handleExtractMedications = async (prescriptionId: string) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await caregiverService.extractMedications(prescriptionId);
+      
+      // Update the prescription with extracted medications
+      setPrescriptions(prev => 
+        prev.map(p => p.id === prescriptionId ? 
+          {...p, medications: response.medications} : p
+        )
+      );
+      
+      // Also update the selected prescription if it's currently being viewed
+      if (selectedPrescription && selectedPrescription.id === prescriptionId) {
+        setSelectedPrescription({
+          ...selectedPrescription,
+          medications: response.medications
+        });
+      }
+      
+      alert('Medications extracted successfully!');
+    } catch (error: any) {
+      console.error('Error extracting medications:', error);
+      setError(error.response?.data?.message || 'Failed to extract medications');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Filter prescriptions based on search term, patient filter, and status filter
   const filteredPrescriptions = prescriptions.filter(prescription => {
     const matchesSearch = prescription.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -680,6 +711,15 @@ const CaregiverPrescriptions: React.FC = () => {
                 >
                   <DownloadIcon size={16} className="mr-1" />
                   Download File
+                </button>
+              )}
+              {selectedPrescription.file && (
+                <button
+                  onClick={() => handleExtractMedications(selectedPrescription.id)}
+                  className="ml-2 inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  <SearchIcon size={16} className="mr-1" />
+                  Extract Medications
                 </button>
               )}
             </div>

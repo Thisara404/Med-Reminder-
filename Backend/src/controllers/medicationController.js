@@ -58,3 +58,24 @@ exports.updateMedication = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Delete medication (Caregiver only)
+exports.deleteMedication = async (req, res) => {
+  try {
+    const medication = await Medication.findOneAndDelete({
+      _id: req.params.medicationId,
+      patient: req.params.patientId
+    });
+    
+    if (!medication) {
+      return res.status(404).json({ message: 'Medication not found' });
+    }
+
+    // Also delete any associated reminders
+    await Reminder.deleteMany({ medication: req.params.medicationId });
+
+    res.json({ message: 'Medication deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};

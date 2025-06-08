@@ -4,6 +4,7 @@ const Caregiver = require('../model/Caregiver');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createWorker } = require('tesseract.js');
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -37,6 +38,35 @@ const upload = multer({
   }
 }).single('prescriptionFile');
 
+// Extract medications from image using OCR
+async function extractMedicationsFromImage(filePath) {
+  try {
+    const worker = await createWorker();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    
+    const { data: { text } } = await worker.recognize(filePath);
+    await worker.terminate();
+    
+    // Simple regex to find medication patterns
+    // This is a basic example - you would need more sophisticated parsing
+    const medicationPattern = /([A-Za-z]+)\s+(\d+mg|\d+\s*mg)/g;
+    const matches = [...text.matchAll(medicationPattern)];
+    
+    const medications = matches.map(match => ({
+      name: match[1],
+      dosage: match[2],
+      frequency: 'Once daily', // Default value
+      instructions: 'Take as directed' // Default value
+    }));
+    
+    return medications;
+  } catch (error) {
+    console.error('Error extracting medications:', error);
+    return [];
+  }
+}
+
 // Upload prescription
 exports.uploadPrescription = async (req, res) => {
   upload(req, res, async (err) => {
@@ -49,28 +79,14 @@ exports.uploadPrescription = async (req, res) => {
 
     try {
       const { patientId, name, doctor } = req.body;
-
-      if (!patientId) {
-        return res.status(400).json({ message: 'Patient ID is required' });
+      
+      // Extract medications if file is an image
+      let extractedMedications = [];
+      if (req.file && ['image/jpeg', 'image/png', 'image/jpg'].includes(req.file.mimetype)) {
+        extractedMedications = await extractMedicationsFromImage(req.file.path);
       }
-
-      // Find the caregiver
-      const caregiver = await Caregiver.findOne({ user: req.user.id });
-      if (!caregiver) {
-        return res.status(404).json({ message: 'Caregiver profile not found' });
-      }
-
-      // Check if patient is assigned to this caregiver
-      if (!caregiver.patients.includes(patientId)) {
-        return res.status(403).json({ message: 'You are not assigned to this patient' });
-      }
-
-      // Find patient details
-      const patient = await Patient.findById(patientId).populate('user', 'name');
-      if (!patient) {
-        return res.status(404).json({ message: 'Patient not found' });
-      }
-
+      
+      // Create prescription with extracted medications
       const prescription = new Prescription({
         patient: patientId,
         uploadedBy: req.user.id,
@@ -82,6 +98,7 @@ exports.uploadPrescription = async (req, res) => {
           mimetype: req.file.mimetype,
           originalname: req.file.originalname
         } : null,
+        medications: extractedMedications,
         status: 'active'
       });
 
@@ -239,6 +256,41 @@ exports.deletePrescription = async (req, res) => {
     res.json({ message: 'Prescription deleted successfully' });
   } catch (error) {
     console.error('Error deleting prescription:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Extract medications from prescription file
+exports.extractMedications = async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    
+    // Find prescription
+    const prescription = await Prescription.findById(prescriptionId);
+    if (!prescription) {
+      return res.status(404).json({ message: 'Prescription not found' });
+    }
+    
+    // Check if prescription has a file
+    if (!prescription.prescriptionFile || !prescription.prescriptionFile.path) {
+      return res.status(400).json({ message: 'No prescription file available for extraction' });
+    }
+    
+    // Use OCR to extract medications
+    const extractedMedications = await extractMedicationsFromImage(prescription.prescriptionFile.path);
+    
+    // Update prescription with extracted medications
+    prescription.medications = extractedMedications;
+    prescription.analyzedAt = new Date();
+    prescription.status = 'analyzed';
+    await prescription.save();
+    
+    res.json({ 
+      message: 'Medications extracted successfully', 
+      medications: extractedMedications 
+    });
+  } catch (error) {
+    console.error('Error extracting medications:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

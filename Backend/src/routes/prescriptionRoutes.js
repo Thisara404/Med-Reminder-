@@ -7,7 +7,8 @@ const {
   uploadPrescription,
   getPrescriptions,
   updatePrescription,
-  deletePrescription
+  deletePrescription,
+  extractMedications
 } = require('../controllers/prescriptionController');
 
 // Prescription routes
@@ -15,5 +16,6 @@ router.post('/upload', protect, authorize('caregiver'), uploadPrescription);
 router.get('/', protect, authorize('caregiver'), getPrescriptions);
 router.put('/:prescriptionId', protect, authorize('caregiver'), updatePrescription);
 router.delete('/:prescriptionId', protect, authorize('caregiver'), deletePrescription);
+router.post('/:prescriptionId/extract', protect, authorize('caregiver'), extractMedications);
 
 module.exports = router;
