@@ -1,52 +1,49 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const patientSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  dateOfBirth: {
-    type: Date,
-    required: true
-  },
-  caregivers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Caregiver'
-  }],
-  medications: [{
-    name: String,
-    dosage: String,
-    frequency: String,
-    time: String,
-    startDate: Date,
-    endDate: Date,
-    instructions: String,
-    purpose: String
-  }],
-  conditions: [String],
-  reminders: [{
-    medication: String,
-    dosage: String,
-    time: String,
-    taken: Boolean,
+const patientSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    dateOfBirth: {
+      type: Date,
+      required: true,
+    },
+    phone: String,
+    conditions: [String],
+    caregivers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Caregiver",
+      },
+    ],
+    medications: [
+      {
+        medication: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Medication",
+        },
+        dosage: String,
+        frequency: String,
+        time: String,
+        startDate: Date,
+        endDate: Date,
+        status: {
+          type: String,
+          enum: ["active", "completed", "discontinued"],
+          default: "active",
+        },
+      },
+    ],
     status: {
       type: String,
-      enum: ['upcoming', 'completed', 'missed']
-    }
-  }],
-  settings: {
-    notifications: {
-      email: { type: Boolean, default: true },
-      push: { type: Boolean, default: true },
-      sms: { type: Boolean, default: false }
+      enum: ["stable", "attention", "critical"],
+      default: "stable",
     },
-    privacy: {
-      shareWithCaregiver: { type: Boolean, default: true },
-      shareWithDoctor: { type: Boolean, default: true }
-    }
-  }
-}, { timestamps: true });
+  },
+  { timestamps: true }
+);
 
-const Patient = mongoose.model('Patient', patientSchema);
-module.exports = Patient;
+module.exports = mongoose.model("Patient", patientSchema);

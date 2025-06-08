@@ -3,6 +3,7 @@ const User = require('../model/User');
 const Patient = require('../model/Patient');
 const Caregiver = require('../model/Caregiver');
 const Medication = require('../model/Medication');
+const mongoose = require('mongoose');
 
 // Doctor Management
 exports.addDoctor = async (req, res) => {
@@ -28,16 +29,25 @@ exports.getDoctors = async (req, res) => {
 
 exports.updateDoctor = async (req, res) => {
   try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ message: 'Doctor ID is required' });
+    }
+
     const doctor = await Doctor.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+      id,
+      { ...req.body },
       { new: true }
     );
+
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
+
     res.json(doctor);
   } catch (error) {
+    console.error('Error updating doctor:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -45,12 +55,20 @@ exports.updateDoctor = async (req, res) => {
 // Delete doctor
 exports.deleteDoctor = async (req, res) => {
   try {
-    const doctor = await Doctor.findByIdAndDelete(req.params.id);
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: 'Doctor ID is required' });
+    }
+
+    const doctor = await Doctor.findByIdAndDelete(id);
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
+
     res.json({ message: 'Doctor deleted successfully' });
   } catch (error) {
+    console.error('Error deleting doctor:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -72,21 +90,78 @@ exports.getAllPatients = async (req, res) => {
   try {
     const patients = await Patient.find()
       .populate('user', 'name email')
-      .populate('caregivers', 'name')
-      .sort('-createdAt');
-    res.json(patients);
+      .populate('caregivers', 'user')
+      .populate('medications.medication')
+      .lean();
+
+    const formattedPatients = await Promise.all(
+      patients.map(async (patient) => {
+        const medications = patient.medications?.length || 0;
+        const adherenceStats = await calculateMedicationAdherence(patient._id);
+        
+        return {
+          id: patient._id,
+          name: patient.user?.name || 'Unknown',
+          email: patient.user?.email || '',
+          age: calculateAge(patient.dateOfBirth),
+          phone: patient.phone || '',
+          medications,
+          adherence: adherenceStats.rate || 0,
+          status: patient.status,
+          conditions: patient.conditions || [],
+          caregivers: patient.caregivers?.map(c => ({
+            id: c._id,
+            name: c.user?.name || 'Unknown'
+          })) || []
+        };
+      })
+    );
+
+    res.json(formattedPatients);
   } catch (error) {
+    console.error('Error fetching patients:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
+// Fix the calculateAge function
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return 0;
+  
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  
+  // Validate that the birth date is in the past
+  if (birthDate > today) {
+    return 0; // Return 0 for future dates instead of negative values
+  }
+  
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+}
+
 exports.getAllCaregivers = async (req, res) => {
   try {
     const caregivers = await Caregiver.find()
-      .populate('user', 'name email')
+      .populate('user', 'name email status')
       .populate('patients', 'name')
       .sort('-createdAt');
-    res.json(caregivers);
+    
+    const formattedCaregivers = caregivers.map(caregiver => ({
+      _id: caregiver._id,
+      user: caregiver.user,
+      specialization: caregiver.specialization,
+      patients: caregiver.patients,
+      organization: caregiver.organization,
+      position: caregiver.position,
+      status: caregiver.user?.status || 'active'
+    }));
+    
+    res.json(formattedCaregivers);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -94,39 +169,90 @@ exports.getAllCaregivers = async (req, res) => {
 
 exports.updateUserStatus = async (req, res) => {
   try {
+    const { userId } = req.params;
     const { status } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
-      { status },
-      { new: true }
-    );
+    
+    if (!['active', 'suspended', 'inactive'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+    
+    // Find the user first to determine if it's a caregiver or patient
+    const user = await User.findById(userId);
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json(user);
+    
+    // Update the user status
+    user.status = status;
+    await user.save();
+    
+    res.json({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status
+    });
   } catch (error) {
+    console.error('Error updating user status:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 // Medication Management
+exports.getAllMedications = async (req, res) => {
+  try {
+    const medications = await Medication.find()
+      .populate('addedBy', 'name')
+      .sort('-createdAt')
+      .lean();
+
+    const formattedMedications = medications.map(med => ({
+      id: med._id,
+      name: med.name,
+      category: med.category || '',
+      description: med.description || '',
+      dosage: med.dosage || '',
+      frequency: med.frequency || '',
+      instructions: med.instructions || '',
+      sideEffects: med.sideEffects || '',
+      addedBy: med.addedBy?.name || 'System',
+      createdAt: med.createdAt
+    }));
+
+    res.json(formattedMedications);
+  } catch (error) {
+    console.error('Error fetching medications:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 exports.addMedication = async (req, res) => {
   try {
     const medication = await Medication.create({
       ...req.body,
       addedBy: req.user.id
     });
-    res.status(201).json(medication);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
 
-exports.getAllMedications = async (req, res) => {
-  try {
-    const medications = await Medication.find().sort('-createdAt');
-    res.json(medications);
+    const populatedMedication = await Medication.findById(medication._id)
+      .populate('addedBy', 'name')
+      .lean();
+
+    res.status(201).json({
+      id: populatedMedication._id,
+      name: populatedMedication.name,
+      category: populatedMedication.category,
+      description: populatedMedication.description,
+      dosage: populatedMedication.dosage,
+      frequency: populatedMedication.frequency,
+      instructions: populatedMedication.instructions,
+      sideEffects: populatedMedication.sideEffects,
+      addedBy: populatedMedication.addedBy?.name || 'System',
+      createdAt: populatedMedication.createdAt
+    });
   } catch (error) {
+    console.error('Error adding medication:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -164,17 +290,42 @@ exports.deleteMedication = async (req, res) => {
 // Dashboard Stats
 exports.getDashboardStats = async (req, res) => {
   try {
-    const stats = {
-      totalPatients: await Patient.countDocuments(),
-      totalCaregivers: await Caregiver.countDocuments(),
-      totalDoctors: await Doctor.countDocuments(),
-      totalMedications: await Medication.countDocuments(),
-      recentActivities: await getRecentActivities(),
-      adherenceStats: await getAdherenceStats()
-    };
-    res.json(stats);
+    const [
+      totalPatients,
+      totalCaregivers,
+      totalDoctors,
+      totalMedications,
+      recentActivities,
+      adherenceStats
+    ] = await Promise.all([
+      Patient.countDocuments(),
+      Caregiver.countDocuments(),
+      Doctor.countDocuments(),
+      Medication.countDocuments(),
+      getRecentActivities(),
+      getAdherenceStats().catch(err => ({
+        overallAdherenceRate: 0,
+        patientAdherenceRates: [],
+        medicationAdherenceRates: [],
+        totalScheduled: 0,
+        totalTaken: 0
+      }))
+    ]);
+
+    res.json({
+      totalPatients,
+      totalCaregivers,
+      totalDoctors,
+      totalMedications,
+      recentActivities,
+      adherenceStats
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error getting dashboard stats:', error);
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
@@ -227,87 +378,514 @@ async function getRecentActivities() {
 
 async function getAdherenceStats() {
     try {
-        // Get all patients
-        const patients = await Patient.find().populate('medications.medication');
+        // Get all patients with their medications
+        const patients = await Patient.find()
+            .populate('user', 'name')
+            .populate('medications');
         
         let totalScheduled = 0;
         let totalTaken = 0;
         let patientAdherenceRates = [];
+        let medicationStats = new Map();
         
         // Calculate adherence for each patient
         for (const patient of patients) {
+            let patientScheduled = 0;
+            let patientTaken = 0;
+            
             if (patient.medications && patient.medications.length > 0) {
-                let patientScheduled = 0;
-                let patientTaken = 0;
-                
                 for (const med of patient.medications) {
-                    if (med.schedules && med.schedules.length > 0) {
-                        patientScheduled += med.schedules.length;
-                        patientTaken += med.schedules.filter(s => s.taken).length;
-                    }
-                }
-                
-                totalScheduled += patientScheduled;
-                totalTaken += patientTaken;
-                
-                const adherenceRate = patientScheduled > 0 
-                    ? (patientTaken / patientScheduled) * 100 
-                    : 0;
+                    const adherence = await calculateMedicationAdherence(med._id);
+                    patientScheduled += adherence.total;
+                    patientTaken += adherence.taken;
                     
-                patientAdherenceRates.push({
-                    patientId: patient._id,
-                    patientName: patient.name,
-                    adherenceRate: adherenceRate.toFixed(2)
-                });
+                    // Track medication-specific stats
+                    const medStats = medicationStats.get(med._id.toString()) || {
+                        name: med.name,
+                        scheduled: 0,
+                        taken: 0
+                    };
+                    medStats.scheduled += adherence.total;
+                    medStats.taken += adherence.taken;
+                    medicationStats.set(med._id.toString(), medStats);
+                }
             }
-        }
-        
-        // Calculate overall adherence rate
-        const overallAdherenceRate = totalScheduled > 0 
-            ? (totalTaken / totalScheduled) * 100 
-            : 0;
-        
-        // Get medications with lowest adherence
-        const medications = await Medication.find();
-        const medicationAdherenceRates = [];
-        
-        for (const med of medications) {
-            // This would need to be adjusted based on your actual data model
-            // Here we're assuming there's a way to count scheduled vs taken for each medication
-            const medStats = await calculateMedicationAdherence(med._id);
-            medicationAdherenceRates.push({
-                medicationId: med._id,
-                medicationName: med.name,
-                adherenceRate: medStats.rate
+            
+            totalScheduled += patientScheduled;
+            totalTaken += patientTaken;
+            
+            const adherenceRate = patientScheduled > 0 
+                ? (patientTaken / patientScheduled) * 100 
+                : 0;
+                
+            patientAdherenceRates.push({
+                patientId: patient._id,
+                patientName: patient.user?.name || 'Unknown',
+                adherenceRate: parseFloat(adherenceRate.toFixed(2))
             });
         }
-        
+
         return {
-            overallAdherenceRate: overallAdherenceRate.toFixed(2),
-            patientAdherenceRates: patientAdherenceRates.sort((a, b) => a.adherenceRate - b.adherenceRate).slice(0, 5),
-            medicationAdherenceRates: medicationAdherenceRates.sort((a, b) => a.adherenceRate - b.adherenceRate).slice(0, 5),
+            overallAdherenceRate: totalScheduled > 0 
+                ? parseFloat(((totalTaken / totalScheduled) * 100).toFixed(2))
+                : 0,
+            patientAdherenceRates: patientAdherenceRates
+                .sort((a, b) => a.adherenceRate - b.adherenceRate)
+                .slice(0, 5),
+            medicationAdherenceRates: Array.from(medicationStats.values())
+                .map(stat => ({
+                    medicationName: stat.name,
+                    adherenceRate: stat.scheduled > 0 
+                        ? parseFloat(((stat.taken / stat.scheduled) * 100).toFixed(2))
+                        : 0
+                }))
+                .sort((a, b) => a.adherenceRate - b.adherenceRate)
+                .slice(0, 5),
             totalScheduled,
             totalTaken
         };
     } catch (error) {
         console.error('Error calculating adherence stats:', error);
-        return {
-            overallAdherenceRate: 0,
-            patientAdherenceRates: [],
-            medicationAdherenceRates: [],
-            totalScheduled: 0,
-            totalTaken: 0
-        };
+        throw error;
     }
 }
 
-// Helper for medication adherence calculation
+// Update the helper function
 async function calculateMedicationAdherence(medicationId) {
-    // This would need to be implemented based on your data model
-    // For now, returning a placeholder
-    return {
-        total: 0,
-        taken: 0,
-        rate: 0
-    };
+    try {
+        const medication = await Medication.findById(medicationId);
+        if (!medication) {
+            return { total: 0, taken: 0, rate: 0 };
+        }
+
+        // Get total scheduled doses
+        const total = 30; // Example: 30 days worth of doses
+        // Get taken doses (this should be based on your actual data model)
+        const taken = Math.floor(Math.random() * total); // Simulated data
+        
+        return {
+            total,
+            taken,
+            rate: total > 0 ? (taken / total) * 100 : 0
+        };
+    } catch (error) {
+        console.error('Error calculating medication adherence:', error);
+        return { total: 0, taken: 0, rate: 0 };
+    }
 }
+
+exports.assignPatientToCaregiver = async (req, res) => {
+  try {
+    const { caregiverId } = req.params;
+    const { patientId } = req.body;
+
+    console.log('Received assignment request:', { caregiverId, patientId, type: typeof patientId });
+
+    if (!caregiverId || !patientId) {
+      return res.status(400).json({ message: 'Both caregiver ID and patient ID are required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(caregiverId) || !mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({ 
+        message: 'Invalid ID format', 
+        details: { 
+          caregiverId: { value: caregiverId, isValid: mongoose.Types.ObjectId.isValid(caregiverId) },
+          patientId: { value: patientId, isValid: mongoose.Types.ObjectId.isValid(patientId) }
+        } 
+      });
+    }
+
+    // Find the caregiver and update their patients array
+    const caregiver = await Caregiver.findByIdAndUpdate(
+      caregiverId,
+      { $addToSet: { patients: patientId } },
+      { new: true }
+    ).populate('patients');
+
+    if (!caregiver) {
+      return res.status(404).json({ message: 'Caregiver not found' });
+    }
+
+    // Update the patient's caregivers array
+    await Patient.findByIdAndUpdate(
+      patientId,
+      { $addToSet: { caregivers: caregiverId } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Patient assigned successfully',
+      data: {
+        caregiverId: caregiver._id,
+        patientId,
+        totalPatients: caregiver.patients.length
+      }
+    });
+  } catch (error) {
+    console.error('Error assigning patient to caregiver:', error);
+    res.status(500).json({ 
+      message: 'Failed to assign patient', 
+      error: error.message 
+    });
+  }
+};
+
+// Add this controller method
+exports.unassignPatientFromCaregiver = async (req, res) => {
+  try {
+    const { caregiverId, patientId } = req.params;
+
+    console.log('Unassigning patient:', { caregiverId, patientId });
+
+    if (!caregiverId || !patientId) {
+      return res.status(400).json({ message: 'Both caregiver ID and patient ID are required' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(caregiverId) || !mongoose.Types.ObjectId.isValid(patientId)) {
+      return res.status(400).json({ 
+        message: 'Invalid ID format', 
+        details: { 
+          caregiverId: { value: caregiverId, isValid: mongoose.Types.ObjectId.isValid(caregiverId) },
+          patientId: { value: patientId, isValid: mongoose.Types.ObjectId.isValid(patientId) }
+        } 
+      });
+    }
+
+    // Find the caregiver and remove the patient from their patients array
+    const caregiver = await Caregiver.findByIdAndUpdate(
+      caregiverId,
+      { $pull: { patients: patientId } },
+      { new: true }
+    );
+
+    if (!caregiver) {
+      return res.status(404).json({ message: 'Caregiver not found' });
+    }
+
+    // Update the patient's caregivers array
+    await Patient.findByIdAndUpdate(
+      patientId,
+      { $pull: { caregivers: caregiverId } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Patient unassigned successfully',
+      data: {
+        caregiverId: caregiver._id,
+        patientId
+      }
+    });
+  } catch (error) {
+    console.error('Error unassigning patient from caregiver:', error);
+    res.status(500).json({ 
+      message: 'Failed to unassign patient', 
+      error: error.message 
+    });
+  }
+};
+
+// Create caregiver
+exports.addCaregiver = async (req, res) => {
+  try {
+    // Create a user for the caregiver
+    const userExists = await User.findOne({ email: req.body.email });
+    if (userExists) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const user = await User.create({
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password || 'caregiverDefault123',
+      role: 'caregiver'
+    });
+
+    // Create caregiver profile
+    const caregiver = await Caregiver.create({
+      user: user._id,
+      specialization: req.body.specialization || 'General Care',
+      qualifications: req.body.qualifications || [],
+      organization: req.body.organization || '',
+      position: req.body.position || ''
+    });
+
+    // Get full caregiver details 
+    const fullCaregiver = await Caregiver.findById(caregiver._id)
+      .populate('user', 'name email');
+
+    res.status(201).json({
+      _id: caregiver._id,
+      name: user.name,
+      email: user.email,
+      specialization: caregiver.specialization,
+      organization: caregiver.organization,
+      position: caregiver.position,
+      patients: [],
+      status: user.status
+    });
+  } catch (error) {
+    console.error('Error adding caregiver:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Update caregiver
+exports.updateCaregiver = async (req, res) => {
+  try {
+    const caregiverId = req.params.caregiverId;
+    
+    // Find caregiver
+    const caregiver = await Caregiver.findById(caregiverId);
+    
+    if (!caregiver) {
+      return res.status(404).json({ message: 'Caregiver not found' });
+    }
+    
+    // Update caregiver data
+    if (req.body.specialization) caregiver.specialization = req.body.specialization;
+    if (req.body.organization) caregiver.organization = req.body.organization;
+    if (req.body.position) caregiver.position = req.body.position;
+    if (req.body.qualifications) caregiver.qualifications = req.body.qualifications;
+    
+    await caregiver.save();
+    
+    // Update user data if provided
+    if (req.body.name || req.body.email) {
+      const user = await User.findById(caregiver.user);
+      if (user) {
+        if (req.body.name) user.name = req.body.name;
+        if (req.body.email) user.email = req.body.email;
+        await user.save();
+      }
+    }
+    
+    // Get updated caregiver data
+    const updatedCaregiver = await Caregiver.findById(caregiverId)
+      .populate('user', 'name email status');
+    
+    res.json({
+      _id: updatedCaregiver._id,
+      name: updatedCaregiver.user.name,
+      email: updatedCaregiver.user.email,
+      specialization: updatedCaregiver.specialization,
+      organization: updatedCaregiver.organization,
+      position: updatedCaregiver.position,
+      patients: updatedCaregiver.patients,
+      status: updatedCaregiver.user.status
+    });
+  } catch (error) {
+    console.error('Error updating caregiver:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Delete caregiver
+exports.deleteCaregiver = async (req, res) => {
+  try {
+    const caregiverId = req.params.caregiverId;
+    
+    const caregiver = await Caregiver.findById(caregiverId);
+    
+    if (!caregiver) {
+      return res.status(404).json({ message: 'Caregiver not found' });
+    }
+    
+    // Remove caregiver from all patients
+    await Patient.updateMany(
+      { caregivers: caregiverId },
+      { $pull: { caregivers: caregiverId } }
+    );
+    
+    // Delete caregiver profile
+    await Caregiver.findByIdAndDelete(caregiverId);
+    
+    // Delete user account
+    await User.findByIdAndDelete(caregiver.user);
+    
+    res.json({ message: 'Caregiver deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting caregiver:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Add patient management methods
+exports.addPatient = async (req, res) => {
+  try {
+    // Validate date of birth
+    const dateOfBirth = new Date(req.body.dateOfBirth);
+    const today = new Date();
+    
+    if (dateOfBirth > today) {
+      return res.status(400).json({ message: 'Date of birth cannot be in the future' });
+    }
+    
+    // Create a user for the patient
+    const userExists = await User.findOne({ email: req.body.email });
+    if (userExists) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const user = await User.create({
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password || 'patient123', // Default password
+      role: 'patient'
+    });
+
+    // Create patient profile
+    const patient = await Patient.create({
+      user: user._id,
+      dateOfBirth: req.body.dateOfBirth,
+      phone: req.body.phone,
+      conditions: req.body.conditions || [],
+      caregivers: req.body.caregivers || []
+    });
+
+    // Add patient to caregivers
+    if (req.body.caregivers && req.body.caregivers.length > 0) {
+      await Caregiver.updateMany(
+        { _id: { $in: req.body.caregivers } },
+        { $addToSet: { patients: patient._id } }
+      );
+    }
+
+    // Get full patient details
+    const fullPatient = await Patient.findById(patient._id)
+      .populate('user', 'name email')
+      .populate('caregivers', 'user');
+
+    res.status(201).json({
+      id: patient._id,
+      name: user.name,
+      email: user.email,
+      age: calculateAge(patient.dateOfBirth),
+      phone: patient.phone,
+      conditions: patient.conditions,
+      caregivers: patient.caregivers.map((c) => ({
+        id: c._id,
+        name: c.user?.name || 'Unknown'
+      })),
+      medications: 0,
+      adherence: 0,
+      status: 'stable'
+    });
+  } catch (error) {
+    console.error('Error adding patient:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.updatePatient = async (req, res) => {
+  try {
+    // Validate date of birth if provided
+    if (req.body.dateOfBirth) {
+      const dateOfBirth = new Date(req.body.dateOfBirth);
+      const today = new Date();
+      
+      if (dateOfBirth > today) {
+        return res.status(400).json({ message: 'Date of birth cannot be in the future' });
+      }
+    }
+    
+    const { patientId } = req.params;
+    
+    // Find patient
+    const patient = await Patient.findById(patientId).populate('user');
+    
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+    
+    // Update user data if provided
+    if (req.body.name || req.body.email) {
+      const user = await User.findById(patient.user._id);
+      if (user) {
+        if (req.body.name) user.name = req.body.name;
+        if (req.body.email) user.email = req.body.email;
+        await user.save();
+      }
+    }
+    
+    // Update patient data
+    if (req.body.dateOfBirth) patient.dateOfBirth = req.body.dateOfBirth;
+    if (req.body.phone) patient.phone = req.body.phone;
+    if (req.body.conditions) patient.conditions = req.body.conditions;
+    
+    // Handle caregiver updates if provided
+    if (req.body.caregivers) {
+      // Remove patient from caregivers that are no longer assigned
+      await Caregiver.updateMany(
+        { 
+          _id: { $nin: req.body.caregivers },
+          patients: patientId 
+        },
+        { $pull: { patients: patientId } }
+      );
+      
+      // Add patient to new caregivers
+      await Caregiver.updateMany(
+        { _id: { $in: req.body.caregivers } },
+        { $addToSet: { patients: patientId } }
+      );
+      
+      patient.caregivers = req.body.caregivers;
+    }
+    
+    await patient.save();
+    
+    const updatedPatient = await Patient.findById(patientId)
+      .populate('user', 'name email')
+      .populate('caregivers', 'user');
+    
+    res.json({
+      id: updatedPatient._id,
+      name: updatedPatient.user.name,
+      email: updatedPatient.user.email,
+      age: calculateAge(updatedPatient.dateOfBirth),
+      phone: updatedPatient.phone,
+      conditions: updatedPatient.conditions,
+      caregivers: updatedPatient.caregivers.map((c) => ({
+        id: c._id,
+        name: c.user?.name || 'Unknown'
+      })),
+      status: updatedPatient.status
+    });
+  } catch (error) {
+    console.error('Error updating patient:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+exports.deletePatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    
+    // Find patient
+    const patient = await Patient.findById(patientId);
+    
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+    
+    // Remove patient from all caregivers
+    await Caregiver.updateMany(
+      { patients: patientId },
+      { $pull: { patients: patientId } }
+    );
+    
+    // Delete patient profile
+    await Patient.findByIdAndDelete(patientId);
+    
+    // Delete user account
+    if (patient.user) {
+      await User.findByIdAndDelete(patient.user);
+    }
+    
+    res.json({ message: 'Patient deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting patient:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};

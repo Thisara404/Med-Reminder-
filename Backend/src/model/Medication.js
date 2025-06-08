@@ -5,6 +5,14 @@ const medicationSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  category: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
   dosage: {
     type: String,
     required: true
@@ -13,20 +21,9 @@ const medicationSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  time: [{
-    type: String,
-    required: true
-  }],
-  startDate: {
-    type: Date,
-    required: true
-  },
-  endDate: {
-    type: Date
-  },
   instructions: String,
-  purpose: String,
-  prescribedBy: {
+  sideEffects: String,
+  addedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
@@ -47,5 +44,4 @@ const medicationSchema = new mongoose.Schema({
   }
 });
 
-const Medication = mongoose.model('Medication', medicationSchema);
-module.exports = Medication;
+module.exports = mongoose.model('Medication', medicationSchema);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PillIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon } from 'lucide-react';
 import { adminService } from '../../../services/adminService';
+import MedicationModal from './MedicationModal';
 
 const AdminMedications: React.FC = () => {
   const [medications, setMedications] = useState<any[]>([]);
@@ -32,6 +33,18 @@ const AdminMedications: React.FC = () => {
       setIsModalOpen(false);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to add medication');
+    }
+  };
+
+  const handleUpdateMedication = async (medicationData: any) => {
+    if (!selectedMedication) return;
+
+    try {
+      const updatedMedication = await adminService.updateMedication(selectedMedication.id, medicationData);
+      setMedications(medications.map(med => (med.id === updatedMedication.id ? updatedMedication : med)));
+      setIsModalOpen(false);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to update medication');
     }
   };
 
@@ -147,6 +160,18 @@ const AdminMedications: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Medication Modal */}
+      {isModalOpen && (
+        <MedicationModal
+          medication={selectedMedication}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedMedication(null);
+          }}
+          onSubmit={selectedMedication ? handleUpdateMedication : handleAddMedication}
+        />
+      )}
     </div>
   );
 };

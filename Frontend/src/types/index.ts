@@ -8,9 +8,10 @@ export interface Patient {
   adherence: number;
   conditions: string[];
   status: 'stable' | 'attention' | 'critical';
-  dateOfBirth?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
+  caregivers?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 export interface Note {
