@@ -28,20 +28,40 @@ const medicationSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  prescribedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false // Make it optional
+  },
   patient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
-    required: false // Make patient optional for admin-created medications
+    required: true
   },
   status: {
     type: String,
     enum: ['active', 'completed', 'discontinued'],
     default: 'active'
   },
+  source: {
+    type: String,
+    enum: ['prescription', 'manual', 'system'],
+    default: 'manual'
+  },
+  prescriptionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Prescription',
+    required: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+// Add indexes for faster queries
+medicationSchema.index({ patient: 1, status: 1 });
+medicationSchema.index({ name: 1 });
+medicationSchema.index({ prescriptionId: 1 });
 
 module.exports = mongoose.model('Medication', medicationSchema);

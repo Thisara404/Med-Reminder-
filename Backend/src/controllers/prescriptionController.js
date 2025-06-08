@@ -348,11 +348,13 @@ exports.extractMedications = async (req, res) => {
             frequency: med.frequency || 'Once daily',
             instructions: med.instructions || 'Take as directed',
             category: 'Prescription',
-            description: `Extracted from prescription: ${prescription.name}`,
+            description: `Extracted from prescription: ${prescription.name || 'Unnamed prescription'}`,
             patient: prescription.patient._id,
             prescribedBy: req.user.id,
-            addedBy: req.user.id, // Add missing required field
-            status: 'active'
+            addedBy: req.user.id,
+            status: 'active',
+            source: 'prescription',
+            prescriptionId: prescriptionId
           });
           savedMedications++;
         } catch (medicationError) {
@@ -487,6 +489,17 @@ exports.deletePrescription = async (req, res) => {
       return res.status(403).json({ message: 'You are not authorized to delete this prescription' });
     }
 
+    // Delete associated medications that were generated from this prescription
+    if (prescription.medications && prescription.medications.length > 0) {
+      // Find and delete medications that were created from this prescription
+      await Medication.deleteMany({
+        patient: prescription.patient,
+        description: { $regex: `Extracted from prescription: ${prescription.name}` }
+      });
+      
+      console.log(`Deleted medications associated with prescription ${prescriptionId}`);
+    }
+
     // Delete the file from filesystem if it exists
     if (prescription.prescriptionFile && prescription.prescriptionFile.path) {
       try {
@@ -500,7 +513,9 @@ exports.deletePrescription = async (req, res) => {
 
     await Prescription.findByIdAndDelete(prescriptionId);
     
-    res.json({ message: 'Prescription deleted successfully' });
+    res.json({ 
+      message: 'Prescription and associated medications deleted successfully' 
+    });
   } catch (error) {
     console.error('Error deleting prescription:', error);
     res.status(500).json({ message: 'Server error', error: error.message });

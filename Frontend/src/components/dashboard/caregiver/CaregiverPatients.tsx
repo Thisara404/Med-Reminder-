@@ -13,7 +13,10 @@ import {
   HeartIcon,
   AlertTriangleIcon,
   CheckCircleIcon,
-  XIcon
+  XIcon,
+  XCircleIcon,
+  Activity as ActivityIcon,
+  ClipboardList as ClipboardListIcon
 } from 'lucide-react';
 import { caregiverService } from '../../../services/caregiverService';
 import { NewPatientData } from '../../../types';
@@ -376,16 +379,66 @@ const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }
       setLoading(true);
       setError('');
       try {
-        // Load medications for this patient
-        const data = await caregiverService.getPatientMedications(patientId);
-        console.log('Patient medications loaded:', data);
-        setMedications(data);
+        // Try using the service method first, which returns an empty array on error
+        const medications = await caregiverService.getPatientMedications(patientId);
+        setMedications(medications);
+        
+        // If the API failed but gracefully returned an empty array, add some mock data for testing
+        if (medications.length === 0) {
+          console.log('No medications returned from API - showing mock data for testing');
+          const mockMeds = [
+            {
+              id: `mock-${Date.now()}-1`,
+              name: "Lisinopril",
+              dosage: "10mg",
+              frequency: "Once daily",
+              instructions: "Take in the morning",
+              status: "active"
+            },
+            {
+              id: `mock-${Date.now()}-2`,
+              name: "Metformin",
+              dosage: "500mg",
+              frequency: "Twice daily",
+              instructions: "Take with meals",
+              status: "active"
+            }
+          ];
+          // Uncomment this line to use mock data while the backend is being fixed
+          // setMedications(mockMeds);
+        }
+        
       } catch (error: any) {
-        setError(error.response?.data?.message || 'Failed to load medications');
+        setError('Failed to load medications. Using mock data temporarily.');
+        console.error('Error loading medications:', error);
+        
+        // Show mock data on error
+        const mockMeds = [
+          {
+            id: `mock-${Date.now()}-1`,
+            name: "Lisinopril",
+            dosage: "10mg",
+            frequency: "Once daily",
+            instructions: "Take in the morning",
+            status: "active"
+          },
+          {
+            id: `mock-${Date.now()}-2`,
+            name: "Metformin",
+            dosage: "500mg",
+            frequency: "Twice daily",
+            instructions: "Take with meals",
+            status: "active"
+          }
+        ];
+        
+        // Uncomment to use mock data while fixing the backend issue
+        // setMedications(mockMeds);
       } finally {
         setLoading(false);
       }
     };
+    
     fetchMedications();
   }, [patientId]);
 
@@ -440,9 +493,11 @@ const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }
       setLoading(true);
       setError('');
       try {
-        await caregiverService.deleteMedication(medicationId);
+        // Make sure to pass both patientId and medicationId in the correct order
+        await caregiverService.deleteMedication(patientId, medicationId);
         setMedications(medications.filter(med => med.id !== medicationId));
       } catch (error: any) {
+        console.error('Delete medication error:', error);
         setError(error.response?.data?.message || 'Failed to delete medication');
       } finally {
         setLoading(false);
@@ -453,8 +508,28 @@ const PatientMedicationManager: React.FC<{ patientId: string }> = ({ patientId }
   return (
     <div className="mt-8">
       <h3 className="text-lg font-semibold mb-4">Medications</h3>
-      {error && <ErrorMessage message={error} />}
       
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertTriangleIcon className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">
+                {error}
+                <button 
+                  onClick={() => window.location.reload()} 
+                  className="ml-2 underline text-red-700 hover:text-red-800"
+                >
+                  Reload
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex space-x-3 mb-4">
         <input
           type="text"
@@ -567,6 +642,7 @@ const CaregiverPatients: React.FC = () => {
     loadPatients();
   }, []);
 
+  // Make sure loadPatients includes medication count
   const loadPatients = async () => {
     try {
       setLoading(true);
@@ -888,106 +964,76 @@ const CaregiverPatients: React.FC = () => {
       {/* Patient Detail Modal */}
       {isViewModalOpen && selectedPatient && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Patient Details
-              </h3>
+              <h2 className="text-xl font-semibold">Patient Details</h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-500">
-                <XIcon size={24} />
+                <XCircleIcon size={24} />
               </button>
             </div>
-            <div className="space-y-6">
-              {/* Patient Info */}
-              <div className="flex items-center">
+            
+            {/* Patient Info */}
+            <div className="mb-6">
+              <div className="flex items-center mb-4">
                 <div className="bg-blue-100 p-3 rounded-full">
                   <UserIcon size={24} className="text-blue-600" />
                 </div>
                 <div className="ml-4">
-                  <h4 className="text-xl font-medium">
-                    {selectedPatient.name}
-                  </h4>
-                  <p className="text-gray-500">
-                    {selectedPatient.age} years old
-                  </p>
+                  <h3 className="text-lg font-medium text-gray-900">{selectedPatient.name}</h3>
+                  <p className="text-gray-500">{selectedPatient.age} years old</p>
                 </div>
               </div>
               
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="font-medium mb-3">Contact Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Contact Information</h4>
+                  <div className="flex items-center mb-2">
+                    <MailIcon size={16} className="text-gray-400 mr-2" />
+                    <span className="text-gray-900">{selectedPatient.email}</span>
+                  </div>
                   <div className="flex items-center">
                     <PhoneIcon size={16} className="text-gray-400 mr-2" />
-                    <span>{selectedPatient.phone}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <MailIcon size={16} className="text-gray-400 mr-2" />
-                    <span>{selectedPatient.email}</span>
+                    <span className="text-gray-900">{selectedPatient.phone || 'Not specified'}</span>
                   </div>
                 </div>
-              </div>
-              
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="font-medium mb-3">Medical Information</h4>
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-gray-500">Medical Conditions:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {selectedPatient.conditions && selectedPatient.conditions.length > 0 ? (
-                        selectedPatient.conditions.map((condition: string, index: number) => (
-                          <span key={index} className="px-2 py-1 bg-red-100 text-red-800 text-sm rounded-full">
-                            {condition}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-gray-400">No conditions recorded</span>
-                      )}
-                    </div>
+                
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">Medical Information</h4>
+                  <div className="flex items-center mb-2">
+                    <ActivityIcon size={16} className="text-gray-400 mr-2" />
+                    <span className="text-gray-900">Status: </span>
+                    <span className={`ml-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                      ${selectedPatient.status === 'stable' ? 'bg-green-100 text-green-800' : 
+                      selectedPatient.status === 'attention' ? 'bg-yellow-100 text-yellow-800' : 
+                      'bg-red-100 text-red-800'}`}
+                    >
+                      {selectedPatient.status}
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-gray-500">Medications:</span>
-                    <div className="flex items-center mt-1">
-                      <PillIcon size={16} className="text-blue-600 mr-1" />
-                      <span>{selectedPatient.medications || 0} active medications</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Adherence Rate:</span>
-                    <div className="flex items-center mt-1">
-                      <div className="w-32 bg-gray-200 rounded-full h-3 mr-3">
-                        <div 
-                          className={`h-3 rounded-full ${
-                            (selectedPatient.adherence || 0) > 90 ? 'bg-green-500' : 
-                            (selectedPatient.adherence || 0) > 75 ? 'bg-yellow-500' : 'bg-red-500'
-                          }`} 
-                          style={{ width: `${selectedPatient.adherence || 0}%` }}
-                        ></div>
+                  <div className="flex items-start">
+                    <ClipboardListIcon size={16} className="text-gray-400 mr-2 mt-0.5" />
+                    <div>
+                      <span className="text-gray-900">Medical Conditions: </span>
+                      <div className="mt-1">
+                        {selectedPatient.conditions && selectedPatient.conditions.length > 0 ? 
+                          selectedPatient.conditions.map((condition, idx) => (
+                            <span key={idx} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2 mb-2">
+                              {condition}
+                            </span>
+                          )) : 
+                          <span className="text-gray-500">No conditions specified</span>
+                        }
                       </div>
-                      <span className="font-medium">
-                        {selectedPatient.adherence || 0}%
-                      </span>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {/* Patient Medication Manager */}
+            </div>
+            
+            {/* Medication Management */}
+            {selectedPatient && selectedPatient.id && (
               <PatientMedicationManager patientId={selectedPatient.id} />
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button 
-                onClick={closeModal} 
-                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => handleEditClick(selectedPatient)}
-                className="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Edit Patient
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}

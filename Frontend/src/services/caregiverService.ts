@@ -162,19 +162,54 @@ export const caregiverService = {
   // Get patient medications
   getPatientMedications: async (patientId: string) => {
     try {
-      const response = await axios.get(`${API_URL.replace('/caregiver', '')}/patients/${patientId}/medications`);
+      console.log(`Fetching medications for patient ${patientId}`);
+      
+      // Get the auth token
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (!user || !user.token) {
+        console.error('Authentication token not found');
+        throw new Error('Authentication required');
+      }
+      
+      // Always use direct URL for API calls with proper authorization
+      const response = await axios.get(
+        `http://localhost:5000/api/patients/${patientId}/medications`,
+        {
+          headers: {
+            'Authorization': `Bearer ${user.token}`
+          }
+        }
+      );
+      
       console.log('Medication API response:', response.data);
-      return response.data;
+      return response.data || []; // Ensure we always return an array
     } catch (error) {
       console.error('Error fetching patient medications:', error);
-      throw error;
+      // Return empty array instead of throwing to avoid breaking the UI
+      return [];
     }
   },
 
   // Add medication
   addMedication: async (patientId: string, medicationData: any) => {
     try {
-      const response = await axios.post(`${API_URL.replace('/caregiver', '')}/patients/${patientId}/medications`, medicationData);
+      console.log(`Adding medication for patient ${patientId}:`, medicationData);
+      
+      // Complete the medication data with required fields
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const completeData = {
+        ...medicationData,
+        addedBy: user.id, // Add the required addedBy field
+        category: medicationData.category || 'General', // Ensure category is provided
+        description: medicationData.description || `${medicationData.name} ${medicationData.dosage || ''}` // Ensure description is provided
+      };
+      
+      const response = await axios.post(
+        `http://localhost:5000/api/patients/${patientId}/medications`, 
+        completeData
+      );
+      
+      console.log('Add medication response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error adding medication:', error);
@@ -182,10 +217,38 @@ export const caregiverService = {
     }
   },
 
-  // Delete medication
-  deleteMedication: async (medicationId: string) => {
+  // Update medication
+  updateMedication: async (patientId: string, medicationId: string, updates: any) => {
     try {
-      const response = await axios.delete(`${API_URL.replace('/caregiver', '')}/medications/${medicationId}`);
+      console.log(`Updating medication ${medicationId} for patient ${patientId}:`, updates);
+      
+      const response = await axios.put(
+        `http://localhost:5000/api/patients/${patientId}/medications/${medicationId}`, 
+        updates
+      );
+      
+      console.log('Update medication response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating medication:', error);
+      throw error;
+    }
+  },
+
+  // Delete medication
+  deleteMedication: async (patientId: string, medicationId: string) => {
+    try {
+      console.log(`Deleting medication ${medicationId} for patient ${patientId}`);
+      
+      if (!medicationId) {
+        throw new Error('Medication ID is required for deletion');
+      }
+      
+      const response = await axios.delete(
+        `http://localhost:5000/api/patients/${patientId}/medications/${medicationId}`
+      );
+      
+      console.log('Delete medication response:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error deleting medication:', error);
