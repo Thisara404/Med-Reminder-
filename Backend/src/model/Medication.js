@@ -31,7 +31,7 @@ const medicationSchema = new mongoose.Schema({
   patient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Patient',
-    required: true
+    required: false // Make patient optional for admin-created medications
   },
   status: {
     type: String,

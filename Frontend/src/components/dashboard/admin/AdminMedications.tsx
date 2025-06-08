@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { PillIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon } from 'lucide-react';
 import { adminService } from '../../../services/adminService';
 import MedicationModal from './MedicationModal';
 
@@ -17,22 +16,43 @@ const AdminMedications: React.FC = () => {
 
   const loadMedications = async () => {
     try {
+      setLoading(true);
+      setError('');
+      
+      console.log('Loading medications...');
       const data = await adminService.getAllMedications();
-      setMedications(data);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to load medications');
+      console.log('Received medications data:', data);
+      
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setMedications(data);
+      } else {
+        console.warn('Received non-array data:', data);
+        setMedications([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading medications:', error);
+      setError(error.message || 'Failed to load medications. Please try again.');
+      setMedications([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleRetry = () => {
+    setError('');
+    loadMedications();
+  };
+
   const handleAddMedication = async (medicationData: any) => {
     try {
+      setError('');
       const newMedication = await adminService.addMedication(medicationData);
-      setMedications([...medications, newMedication]);
+      setMedications(prev => [...prev, newMedication]);
       setIsModalOpen(false);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to add medication');
+    } catch (error: any) {
+      console.error('Error adding medication:', error);
+      setError(error.message || 'Failed to add medication');
     }
   };
 
@@ -40,11 +60,16 @@ const AdminMedications: React.FC = () => {
     if (!selectedMedication) return;
 
     try {
+      setError('');
       const updatedMedication = await adminService.updateMedication(selectedMedication.id, medicationData);
-      setMedications(medications.map(med => (med.id === updatedMedication.id ? updatedMedication : med)));
+      setMedications(prev => 
+        prev.map(med => med.id === selectedMedication.id ? updatedMedication : med)
+      );
       setIsModalOpen(false);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update medication');
+      setSelectedMedication(null);
+    } catch (error: any) {
+      console.error('Error updating medication:', error);
+      setError(error.message || 'Failed to update medication');
     }
   };
 
@@ -52,24 +77,51 @@ const AdminMedications: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this medication?')) {
       try {
         await adminService.deleteMedication(id);
-        setMedications(medications.filter(med => med.id !== id));
-      } catch (error) {
-        setError(error.response?.data?.message || 'Failed to delete medication');
+        setMedications(prev => prev.filter(med => med.id !== id));
+      } catch (error: any) {
+        console.error('Error deleting medication:', error);
+        setError(error.message || 'Failed to delete medication');
       }
     }
   };
 
   const filteredMedications = medications.filter(med => 
-    med.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    med.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    med.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    (med.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (med.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (med.description || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) return <div className="flex justify-center p-8">Loading...</div>;
-  if (error) return <div className="text-red-500 p-4">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">Loading medications...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-red-800">Error Loading Medications</h3>
+            <p className="text-red-700 mt-1">{error}</p>
+          </div>
+          <button
+            onClick={handleRetry}
+            className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Medications Management</h1>
         <button
@@ -77,17 +129,15 @@ const AdminMedications: React.FC = () => {
             setSelectedMedication(null);
             setIsModalOpen(true);
           }}
-          className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
         >
-          <PlusIcon size={20} className="mr-2" />
           Add Medication
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-6">
+      {/* Search */}
+      <div className="mb-4">
         <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
             placeholder="Search medications..."
@@ -100,68 +150,81 @@ const AdminMedications: React.FC = () => {
 
       {/* Medications List */}
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Medication
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredMedications.map((medication) => (
-              <tr key={medication.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="bg-blue-100 p-2 rounded-full">
-                      <PillIcon size={20} className="text-blue-600" />
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {medication.name}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{medication.category}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="text-sm text-gray-900">{medication.description}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => {
-                      setSelectedMedication(medication);
-                      setIsModalOpen(true);
-                    }}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
-                  >
-                    <EditIcon size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteMedication(medication.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <TrashIcon size={18} />
-                  </button>
-                </td>
+        {filteredMedications.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No medications found</p>
+            <button
+              onClick={() => {
+                setSelectedMedication(null);
+                setIsModalOpen(true);
+              }}
+              className="mt-2 text-blue-600 hover:text-blue-800"
+            >
+              Add the first medication
+            </button>
+          </div>
+        ) : (
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Dosage
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Frequency
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredMedications.map((medication) => (
+                <tr key={medication.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{medication.name}</div>
+                    <div className="text-sm text-gray-500">{medication.description}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {medication.category}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {medication.dosage}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {medication.frequency}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setSelectedMedication(medication);
+                        setIsModalOpen(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMedication(medication.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Medication Modal */}
+      {/* Modal */}
       {isModalOpen && (
         <MedicationModal
           medication={selectedMedication}

@@ -20,7 +20,15 @@ const MedicationModal: React.FC<MedicationModalProps> = ({ medication, onClose, 
 
   useEffect(() => {
     if (medication) {
-      setFormData(medication);
+      setFormData({
+        name: medication.name || '',
+        category: medication.category || '',
+        description: medication.description || '',
+        dosage: medication.dosage || '',
+        frequency: medication.frequency || '',
+        instructions: medication.instructions || '',
+        sideEffects: medication.sideEffects || ''
+      });
     }
   }, [medication]);
 

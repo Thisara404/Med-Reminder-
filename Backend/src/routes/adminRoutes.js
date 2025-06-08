@@ -6,10 +6,20 @@ const adminController = require('../controllers/adminController');
 
 // Check if user is admin middleware
 const isAdmin = (req, res, next) => {
-  if (!req.user.isAdmin) {
-    return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const user = req.user;
+    
+    // Check if user is an admin
+    if (!user.isAdmin && user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: 'Access denied. Admin privileges required.' 
+      });
+    }
+
+    next();
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
-  next();
 };
 
 // Doctor management
@@ -23,30 +33,14 @@ router.get('/patients', protect, isAdmin, adminController.getAllPatients);
 router.get('/caregivers', protect, isAdmin, adminController.getAllCaregivers);
 router.put('/users/:userId/status', protect, isAdmin, adminController.updateUserStatus);
 
-// Medication management
-router.post('/medications', protect, isAdmin, adminController.addMedication);
-router.put('/medications/:id', protect, isAdmin, adminController.updateMedication);
-router.delete('/medications/:id', protect, isAdmin, adminController.deleteMedication);
+// Medication management routes - FIXED
 router.get('/medications', protect, isAdmin, adminController.getAllMedications);
+router.post('/medications', protect, isAdmin, adminController.addMedication);
+router.put('/medications/:medicationId', protect, isAdmin, adminController.updateMedication);
+router.delete('/medications/:medicationId', protect, isAdmin, adminController.deleteMedication);
 
 // Dashboard stats
 router.get('/stats', protect, isAdmin, adminController.getDashboardStats);
-
-// Assign patient to caregiver
-router.post(
-  '/caregivers/:caregiverId/patients',
-  protect,
-  isAdmin,
-  adminController.assignPatientToCaregiver
-);
-
-// Unassign patient from caregiver
-router.delete(
-  '/caregivers/:caregiverId/patients/:patientId',
-  protect,
-  isAdmin,
-  adminController.unassignPatientFromCaregiver
-);
 
 // Caregiver management
 router.post('/caregivers', protect, isAdmin, adminController.addCaregiver);
@@ -57,5 +51,9 @@ router.delete('/caregivers/:caregiverId', protect, isAdmin, adminController.dele
 router.post('/patients', protect, isAdmin, adminController.addPatient);
 router.put('/patients/:patientId', protect, isAdmin, adminController.updatePatient);
 router.delete('/patients/:patientId', protect, isAdmin, adminController.deletePatient);
+
+// Assignment management
+router.post('/caregivers/:caregiverId/patients', protect, isAdmin, adminController.assignPatientToCaregiver);
+router.delete('/caregivers/:caregiverId/patients/:patientId', protect, isAdmin, adminController.unassignPatientFromCaregiver);
 
 module.exports = router;

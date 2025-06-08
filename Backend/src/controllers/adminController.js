@@ -203,87 +203,157 @@ exports.updateUserStatus = async (req, res) => {
 // Medication Management
 exports.getAllMedications = async (req, res) => {
   try {
-    const medications = await Medication.find()
+    console.log('Admin getAllMedications called');
+    console.log('User:', req.user ? req.user.email : 'No user');
+    
+    // Query medications without any patient filtering for admin view
+    const medications = await Medication.find({})
       .populate('addedBy', 'name')
-      .sort('-createdAt')
+      .sort({ createdAt: -1 })
       .lean();
 
+    console.log(`Found ${medications.length} medications`);
+
+    // If no medications exist, return empty array instead of error
+    if (!medications || medications.length === 0) {
+      console.log('No medications found, returning empty array');
+      return res.status(200).json([]);
+    }
+
+    // Format the response to ensure all fields are present
     const formattedMedications = medications.map(med => ({
-      id: med._id,
-      name: med.name,
-      category: med.category || '',
-      description: med.description || '',
-      dosage: med.dosage || '',
-      frequency: med.frequency || '',
+      id: med._id.toString(),
+      name: med.name || 'Unknown',
+      category: med.category || 'Uncategorized',
+      description: med.description || 'No description',
+      dosage: med.dosage || 'Not specified',
+      frequency: med.frequency || 'Not specified',
       instructions: med.instructions || '',
       sideEffects: med.sideEffects || '',
-      addedBy: med.addedBy?.name || 'System',
-      createdAt: med.createdAt
+      addedBy: med.addedBy?.name || 'Unknown',
+      createdAt: med.createdAt || new Date(),
+      status: med.status || 'active'
     }));
 
-    res.json(formattedMedications);
+    console.log('Formatted medications:', formattedMedications.length);
+    res.status(200).json(formattedMedications);
   } catch (error) {
-    console.error('Error fetching medications:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error in getAllMedications:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch medications', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
 exports.addMedication = async (req, res) => {
   try {
-    const medication = await Medication.create({
-      ...req.body,
-      addedBy: req.user.id
-    });
-
-    const populatedMedication = await Medication.findById(medication._id)
-      .populate('addedBy', 'name')
-      .lean();
-
+    console.log('Adding medication:', req.body);
+    
+    const medicationData = {
+      name: req.body.name,
+      category: req.body.category,
+      description: req.body.description,
+      dosage: req.body.dosage,
+      frequency: req.body.frequency,
+      instructions: req.body.instructions || '',
+      sideEffects: req.body.sideEffects || '',
+      addedBy: req.user.id,
+      status: 'active'
+      // Don't include patient field for admin medications
+    };
+    
+    const medication = await Medication.create(medicationData);
+    
+    console.log('Medication created:', medication._id);
+    
     res.status(201).json({
-      id: populatedMedication._id,
-      name: populatedMedication.name,
-      category: populatedMedication.category,
-      description: populatedMedication.description,
-      dosage: populatedMedication.dosage,
-      frequency: populatedMedication.frequency,
-      instructions: populatedMedication.instructions,
-      sideEffects: populatedMedication.sideEffects,
-      addedBy: populatedMedication.addedBy?.name || 'System',
-      createdAt: populatedMedication.createdAt
+      id: medication._id,
+      name: medication.name,
+      category: medication.category,
+      description: medication.description,
+      dosage: medication.dosage,
+      frequency: medication.frequency,
+      instructions: medication.instructions,
+      sideEffects: medication.sideEffects,
+      createdAt: medication.createdAt,
+      status: medication.status
     });
   } catch (error) {
     console.error('Error adding medication:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
-// Update medication
 exports.updateMedication = async (req, res) => {
   try {
+    const { medicationId } = req.params;
+    
+    console.log('Updating medication:', medicationId, req.body);
+    
     const medication = await Medication.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+      medicationId,
+      {
+        name: req.body.name,
+        category: req.body.category,
+        description: req.body.description,
+        dosage: req.body.dosage,
+        frequency: req.body.frequency,
+        instructions: req.body.instructions,
+        sideEffects: req.body.sideEffects
+        // Do not update patient field
+      },
       { new: true }
     );
+    
     if (!medication) {
       return res.status(404).json({ message: 'Medication not found' });
     }
-    res.json(medication);
+    
+    res.json({
+      id: medication._id,
+      name: medication.name,
+      category: medication.category,
+      description: medication.description,
+      dosage: medication.dosage,
+      frequency: medication.frequency,
+      instructions: medication.instructions,
+      sideEffects: medication.sideEffects,
+      createdAt: medication.createdAt,
+      status: medication.status
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error updating medication:', error);
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message 
+    });
   }
 };
 
-// Delete medication
 exports.deleteMedication = async (req, res) => {
   try {
-    const medication = await Medication.findByIdAndDelete(req.params.id);
+    const { medicationId } = req.params;
+    
+    console.log('Deleting medication:', medicationId);
+    
+    const medication = await Medication.findByIdAndDelete(medicationId);
+    
     if (!medication) {
       return res.status(404).json({ message: 'Medication not found' });
     }
+    
     res.json({ message: 'Medication deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error deleting medication:', error);
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message 
+    });
   }
 };
 

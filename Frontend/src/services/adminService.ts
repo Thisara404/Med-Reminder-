@@ -2,14 +2,6 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api/admin';
 
-// Add error handling wrapper
-const handleApiError = (error: any) => {
-  if (error.response) {
-    throw new Error(error.response.data.message || 'Server error');
-  }
-  throw new Error('Network error');
-};
-
 export const adminService = {
   // Doctors
   getDoctors: async () => {
@@ -79,33 +71,129 @@ export const adminService = {
   // Medications
   getAllMedications: async () => {
     try {
-      const response = await axios.get(`${API_URL}/medications`);
-      return response.data;
-    } catch (error) {
+      console.log('Fetching medications from API...');
+      
+      // Make sure we have the auth token
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (!user.token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.get(`${API_URL}/medications`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Medications response:', response.data);
+      
+      // Ensure we return an array
+      const medications = Array.isArray(response.data) ? response.data : [];
+      return medications;
+    } catch (error: any) {
       console.error('Error fetching medications:', error);
-      throw error?.response?.data || error;
+      
+      // Handle different error types
+      if (error.response) {
+        console.error('Response error:', error.response.data);
+        throw new Error(`Server error: ${error.response.data?.message || error.response.statusText}`);
+      } else if (error.request) {
+        console.error('Request error:', error.request);
+        throw new Error('No response from server. Please check your connection.');
+      } else {
+        console.error('Setup error:', error.message);
+        throw new Error(`Request failed: ${error.message}`);
+      }
     }
   },
 
   addMedication: async (medicationData: any) => {
-    const response = await axios.post(`${API_URL}/medications`, medicationData);
-    return response.data;
+    try {
+      console.log('Adding medication:', medicationData);
+      
+      // Clean the data to ensure no patient field is sent
+      const cleanData = {
+        name: medicationData.name,
+        category: medicationData.category,
+        description: medicationData.description,
+        dosage: medicationData.dosage,
+        frequency: medicationData.frequency,
+        instructions: medicationData.instructions || '',
+        sideEffects: medicationData.sideEffects || ''
+      };
+      
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const response = await axios.post(`${API_URL}/medications`, cleanData, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Add medication response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error adding medication:', error);
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Failed to add medication');
+      }
+      throw error;
+    }
   },
 
   updateMedication: async (medicationId: string, updates: any) => {
-    const response = await axios.put(`${API_URL}/medications/${medicationId}`, updates);
-    return response.data;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const response = await axios.put(`${API_URL}/medications/${medicationId}`, updates, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating medication:', error);
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Failed to update medication');
+      }
+      throw error;
+    }
   },
 
   deleteMedication: async (medicationId: string) => {
-    const response = await axios.delete(`${API_URL}/medications/${medicationId}`);
-    return response.data;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const response = await axios.delete(`${API_URL}/medications/${medicationId}`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error deleting medication:', error);
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Failed to delete medication');
+      }
+      throw error;
+    }
   },
 
   // Dashboard Stats
   getDashboardStats: async () => {
-    const response = await axios.get(`${API_URL}/stats`);
-    return response.data;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const response = await axios.get(`${API_URL}/stats`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching dashboard stats:', error);
+      throw error;
+    }
   },
 
   // Patient Management
