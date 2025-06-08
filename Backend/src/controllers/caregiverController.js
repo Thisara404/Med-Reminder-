@@ -1,8 +1,33 @@
 const Caregiver = require('../model/Caregiver');
 const Patient = require('../model/Patient');
 const Prescription = require('../model/Prescription');
-const Medication = require('../model/Medication'); // Add this import
+const Medication = require('../model/Medication');
 const User = require('../model/User');
+const Note = require('../model/Note');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for file upload
+const storage = multer.diskStorage({
+  destination: './uploads/prescriptions/',
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10000000 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /pdf|jpeg|jpg|png/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (extname) {
+      cb(null, true);
+    } else {
+      cb('Error: Images and PDFs only!');
+    }
+  }
+});
 
 // Get caregiver profile with patients
 exports.getProfile = async (req, res) => {
@@ -130,24 +155,53 @@ exports.deletePatient = async (req, res) => {
     }
 };
 
-// Add prescription
+// Add prescription with file upload
 exports.addPrescription = async (req, res) => {
-    try {
-        const { patientId, prescriptionData } = req.body;
-        const patient = await Patient.findById(patientId);
-        if (!patient) {
-            return res.status(404).json({ message: 'Patient not found' });
-        }
-        patient.medications.push({
-            ...prescriptionData,
-            prescribedBy: req.user.id,
-            dateAdded: new Date()
-        });
-        await patient.save();
-        res.status(201).json(patient.medications[patient.medications.length - 1]);
-    } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+  upload.single('prescriptionFile')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || err });
     }
+
+    try {
+      const { patientId, name, doctor } = req.body;
+
+      if (!patientId) {
+        return res.status(400).json({ message: 'Patient ID is required' });
+      }
+
+      const prescription = new Prescription({
+        patient: patientId,
+        uploadedBy: req.user.id,
+        name: name || req.file?.originalname || 'Prescription',
+        doctor: doctor || 'Unknown Doctor',
+        prescriptionFile: req.file ? {
+          filename: req.file.filename,
+          path: req.file.path,
+          mimetype: req.file.mimetype
+        } : null,
+        status: 'active'
+      });
+
+      await prescription.save();
+      
+      await prescription.populate('patient', 'user');
+      
+      res.status(201).json({
+        id: prescription._id,
+        name: prescription.name,
+        patient: prescription.patient?.user?.name || 'Unknown Patient',
+        patientId: prescription.patient._id,
+        doctor: prescription.doctor,
+        date: prescription.createdAt,
+        status: prescription.status,
+        file: prescription.prescriptionFile?.filename,
+        medications: prescription.medications || []
+      });
+    } catch (error) {
+      console.error('Error adding prescription:', error);
+      res.status(500).json({ message: 'Server error', error: error.message });
+    }
+  });
 };
 
 // Get all prescriptions for caregiver's patients
@@ -169,10 +223,12 @@ exports.getPrescriptions = async (req, res) => {
       id: p._id,
       name: p.name || 'Prescription',
       patient: p.patient?.user?.name || 'Unknown Patient',
-      doctor: p.doctor?.name || 'Unknown Doctor',
+      patientId: p.patient?._id,
+      doctor: p.doctor || 'Unknown Doctor',
       date: p.createdAt,
       status: p.status,
-      file: p.prescriptionFile?.filename
+      file: p.prescriptionFile?.filename,
+      medications: p.medications || []
     }));
 
     res.json(formattedPrescriptions);
@@ -185,17 +241,20 @@ exports.getPrescriptions = async (req, res) => {
 // Update prescription
 exports.updatePrescription = async (req, res) => {
     try {
-        const { patientId, prescriptionId } = req.params;
+        const { prescriptionId } = req.params;
         const updates = req.body;
-        const patient = await Patient.findOneAndUpdate(
-            { _id: patientId, "medications._id": prescriptionId },
-            { $set: { "medications.$": updates } },
+        
+        const prescription = await Prescription.findByIdAndUpdate(
+            prescriptionId,
+            updates,
             { new: true }
         );
-        if (!patient) {
+        
+        if (!prescription) {
             return res.status(404).json({ message: 'Prescription not found' });
         }
-        res.json(patient.medications.id(prescriptionId));
+        
+        res.json(prescription);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -204,15 +263,14 @@ exports.updatePrescription = async (req, res) => {
 // Delete prescription
 exports.deletePrescription = async (req, res) => {
     try {
-        const { patientId, prescriptionId } = req.params;
-        const patient = await Patient.findByIdAndUpdate(
-            patientId,
-            { $pull: { medications: { _id: prescriptionId } } },
-            { new: true }
-        );
-        if (!patient) {
+        const { prescriptionId } = req.params;
+        
+        const prescription = await Prescription.findByIdAndDelete(prescriptionId);
+        
+        if (!prescription) {
             return res.status(404).json({ message: 'Prescription not found' });
         }
+        
         res.json({ message: 'Prescription deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -223,11 +281,12 @@ exports.deletePrescription = async (req, res) => {
 exports.getPatientNotes = async (req, res) => {
     try {
         const { patientId } = req.params;
-        const patient = await Patient.findById(patientId);
-        if (!patient) {
-            return res.status(404).json({ message: 'Patient not found' });
-        }
-        res.json(patient.notes || []);
+        
+        const notes = await Note.find({ patient: patientId })
+            .populate('caregiver', 'user')
+            .sort('-createdAt');
+        
+        res.json(notes);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -236,16 +295,21 @@ exports.getPatientNotes = async (req, res) => {
 // Add patient note
 exports.addPatientNote = async (req, res) => {
     try {
-        const { patientId, note } = req.body;
-        const patient = await Patient.findByIdAndUpdate(
-            patientId,
-            { $push: { notes: { ...note, createdBy: req.user.id } } },
-            { new: true }
-        );
-        if (!patient) {
-            return res.status(404).json({ message: 'Patient not found' });
-        }
-        res.status(201).json(patient.notes[patient.notes.length - 1]);
+        const { patientId, title, content, category, date } = req.body;
+        
+        const note = new Note({
+            patient: patientId,
+            caregiver: req.user.id,
+            title,
+            content,
+            category,
+            date: date || new Date()
+        });
+
+        await note.save();
+        await note.populate('caregiver', 'user');
+        
+        res.status(201).json(note);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -254,17 +318,20 @@ exports.addPatientNote = async (req, res) => {
 // Update patient note
 exports.updatePatientNote = async (req, res) => {
     try {
-        const { patientId, noteId } = req.params;
+        const { noteId } = req.params;
         const updates = req.body;
-        const patient = await Patient.findOneAndUpdate(
-            { _id: patientId, "notes._id": noteId },
-            { $set: { "notes.$": { ...updates, updatedAt: new Date() } } },
+        
+        const note = await Note.findByIdAndUpdate(
+            noteId,
+            { ...updates, updatedAt: new Date() },
             { new: true }
         );
-        if (!patient) {
+        
+        if (!note) {
             return res.status(404).json({ message: 'Note not found' });
         }
-        res.json(patient.notes.id(noteId));
+        
+        res.json(note);
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
@@ -273,13 +340,11 @@ exports.updatePatientNote = async (req, res) => {
 // Delete patient note
 exports.deletePatientNote = async (req, res) => {
     try {
-        const { patientId, noteId } = req.params;
-        const patient = await Patient.findByIdAndUpdate(
-            patientId,
-            { $pull: { notes: { _id: noteId } } },
-            { new: true }
-        );
-        if (!patient) {
+        const { noteId } = req.params;
+        
+        const note = await Note.findByIdAndDelete(noteId);
+        
+        if (!note) {
             return res.status(404).json({ message: 'Note not found' });
         }
         res.json({ message: 'Note deleted successfully' });

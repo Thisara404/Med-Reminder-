@@ -5,10 +5,15 @@ const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 const {
   uploadPrescription,
-  getPrescriptions
+  getPrescriptions,
+  updatePrescription,
+  deletePrescription
 } = require('../controllers/prescriptionController');
 
-router.post('/:patientId/prescriptions', protect, uploadPrescription);
-router.get('/prescriptions', protect, getPrescriptions);
+// Prescription routes
+router.post('/upload', protect, authorize('caregiver'), uploadPrescription);
+router.get('/', protect, authorize('caregiver'), getPrescriptions);
+router.put('/:prescriptionId', protect, authorize('caregiver'), updatePrescription);
+router.delete('/:prescriptionId', protect, authorize('caregiver'), deletePrescription);
 
 module.exports = router;

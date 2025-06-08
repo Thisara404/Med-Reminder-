@@ -3,6 +3,20 @@ import { NewPatientData } from '../types';
 
 const API_URL = 'http://localhost:5000/api/caregiver';
 
+// Set up axios interceptor for authentication
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const caregiverService = {
   // Profile
   getProfile: async () => {
@@ -87,7 +101,7 @@ export const caregiverService = {
     return response.data;
   },
 
-  // Prescriptions
+  // Prescriptions - Updated methods
   getPrescriptions: async () => {
     try {
       const response = await axios.get(`${API_URL}/prescriptions`);
@@ -98,12 +112,84 @@ export const caregiverService = {
     }
   },
 
-  addPrescription: async (prescriptionData: FormData) => {
-    const response = await axios.post(`${API_URL}/prescriptions`, prescriptionData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
+  addPrescription: async (formData: FormData) => {
+    try {
+      const response = await axios.post(`${API_URL}/prescriptions/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error adding prescription:', error);
+      throw error;
+    }
+  },
+
+  updatePrescription: async (prescriptionId: string, updates: any) => {
+    try {
+      const response = await axios.put(`${API_URL}/prescriptions/${prescriptionId}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating prescription:', error);
+      throw error;
+    }
+  },
+
+  deletePrescription: async (prescriptionId: string) => {
+    try {
+      const response = await axios.delete(`${API_URL}/prescriptions/${prescriptionId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting prescription:', error);
+      throw error;
+    }
+  },
+
+  // Medications
+  getPatientMedications: async (patientId: string) => {
+    const response = await axios.get(`${API_URL}/patients/${patientId}/medications`);
+    return response.data;
+  },
+
+  addMedication: async (patientId: string, medicationData: any) => {
+    const response = await axios.post(`${API_URL}/patients/${patientId}/medications`, medicationData);
+    return response.data;
+  },
+
+  updateMedication: async (patientId: string, medicationId: string, updates: any) => {
+    const response = await axios.put(`${API_URL}/patients/${patientId}/medications/${medicationId}`, updates);
+    return response.data;
+  },
+
+  deleteMedication: async (patientId: string, medicationId: string) => {
+    const response = await axios.delete(`${API_URL}/patients/${patientId}/medications/${medicationId}`);
+    return response.data;
+  },
+
+  // Reminders
+  getReminders: async () => {
+    const response = await axios.get(`${API_URL}/reminders`);
+    return response.data;
+  },
+
+  addReminder: async (reminderData: any) => {
+    const response = await axios.post(`${API_URL}/reminders`, reminderData);
+    return response.data;
+  },
+
+  updateReminder: async (reminderId: string, updates: any) => {
+    const response = await axios.put(`${API_URL}/reminders/${reminderId}`, updates);
+    return response.data;
+  },
+
+  deleteReminder: async (reminderId: string) => {
+    const response = await axios.delete(`${API_URL}/reminders/${reminderId}`);
+    return response.data;
+  },
+
+  markReminderComplete: async (reminderId: string) => {
+    const response = await axios.patch(`${API_URL}/reminders/${reminderId}/complete`);
     return response.data;
   }
 };

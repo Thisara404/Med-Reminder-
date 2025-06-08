@@ -1,8 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { UserIcon, PillIcon, PhoneIcon, MailIcon, ClipboardCheckIcon, PlusIcon, EditIcon, TrashIcon, SearchIcon } from 'lucide-react';
+import { 
+  UserIcon, 
+  PillIcon, 
+  PhoneIcon, 
+  MailIcon, 
+  ClipboardCheckIcon, 
+  PlusIcon, 
+  EditIcon, 
+  TrashIcon, 
+  SearchIcon,
+  CalendarIcon,
+  HeartIcon,
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  XIcon
+} from 'lucide-react';
 import { caregiverService } from '../../../services/caregiverService';
 import { NewPatientData } from '../../../types';
 
+// Loading and Error Components
 const LoadingSpinner = () => (
   <div className="flex justify-center items-center p-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -13,9 +29,7 @@ const ErrorMessage = ({ message }: { message: string }) => (
   <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
     <div className="flex">
       <div className="flex-shrink-0">
-        <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14h4v4h-4zm0-8h4v4h-4zm0 8H6a2 2 0 01-2-2v-4a2 2 0 012-2h4v4H6v4h4zm8-4h-4v4h4v-4zm0-8h-4v4h4V6zm0 8h4a2 2 0 002-2v-4a2 2 0 00-2-2h-4v4h4v4h-4z" />
-        </svg>
+        <AlertTriangleIcon className="h-5 w-5 text-red-400" />
       </div>
       <div className="ml-3">
         <p className="text-sm text-red-700">{message}</p>
@@ -24,11 +38,18 @@ const ErrorMessage = ({ message }: { message: string }) => (
   </div>
 );
 
+// Interfaces
 interface AddPatientFormData {
   name: string;
   email: string;
   phone: string;
   dateOfBirth: string;
+  conditions: string;
+}
+
+interface EditPatientFormData {
+  name: string;
+  phone: string;
   conditions: string;
 }
 
@@ -38,6 +59,13 @@ interface AddPatientModalProps {
   onExistingPatientSubmit: (patientId: string) => void;
 }
 
+interface EditPatientModalProps {
+  patient: any;
+  onClose: () => void;
+  onSubmit: (patientId: string, data: EditPatientFormData) => void;
+}
+
+// Add Patient Modal Component
 const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, onExistingPatientSubmit }) => {
   const [isNewPatient, setIsNewPatient] = useState(true);
   const [availablePatients, setAvailablePatients] = useState<any[]>([]);
@@ -50,6 +78,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
     conditions: ''
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchAvailablePatients = async () => {
@@ -58,31 +87,67 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
         setAvailablePatients(data);
       } catch (error) {
         console.error('Error fetching available patients:', error);
+        setError('Failed to load available patients');
       }
     };
     fetchAvailablePatients();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isNewPatient) {
-      onSubmit({
-        ...formData,
-        conditions: formData.conditions.split(',').map(c => c.trim()).filter(c => c)
-      });
-    } else {
-      onExistingPatientSubmit(selectedPatientId);
+    setLoading(true);
+    setError('');
+
+    try {
+      if (isNewPatient) {
+        // Validate form data
+        if (!formData.name || !formData.email || !formData.phone || !formData.dateOfBirth) {
+          setError('Please fill in all required fields');
+          return;
+        }
+
+        // Validate date of birth
+        const birthDate = new Date(formData.dateOfBirth);
+        const today = new Date();
+        if (birthDate > today) {
+          setError('Date of birth cannot be in the future');
+          return;
+        }
+
+        await onSubmit({
+          ...formData,
+          conditions: formData.conditions.split(',').map(c => c.trim()).filter(c => c)
+        });
+      } else {
+        if (!selectedPatientId) {
+          setError('Please select a patient');
+          return;
+        }
+        await onExistingPatientSubmit(selectedPatientId);
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to add patient');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <h2 className="text-xl font-semibold mb-4">Add Patient</h2>
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Add Patient</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <XIcon size={24} />
+          </button>
+        </div>
+        
+        {error && <ErrorMessage message={error} />}
         
         {/* Toggle between new and existing patient */}
         <div className="flex space-x-4 mb-6">
           <button
+            type="button"
             className={`px-4 py-2 rounded-md ${
               isNewPatient ? 'bg-blue-600 text-white' : 'bg-gray-200'
             }`}
@@ -91,6 +156,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
             New Patient
           </button>
           <button
+            type="button"
             className={`px-4 py-2 rounded-md ${
               !isNewPatient ? 'bg-blue-600 text-white' : 'bg-gray-200'
             }`}
@@ -102,10 +168,9 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
 
         <form onSubmit={handleSubmit}>
           {isNewPatient ? (
-            // New patient form
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <label className="block text-sm font-medium text-gray-700">Name *</label>
                 <input
                   type="text"
                   required
@@ -115,7 +180,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <label className="block text-sm font-medium text-gray-700">Email *</label>
                 <input
                   type="email"
                   required
@@ -125,7 +190,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <label className="block text-sm font-medium text-gray-700">Phone *</label>
                 <input
                   type="tel"
                   required
@@ -135,7 +200,7 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                <label className="block text-sm font-medium text-gray-700">Date of Birth *</label>
                 <input
                   type="date"
                   required
@@ -145,18 +210,17 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Medical Conditions (comma-separated)</label>
+                <label className="block text-sm font-medium text-gray-700">Medical Conditions</label>
                 <input
                   type="text"
                   value={formData.conditions}
                   onChange={(e) => setFormData({...formData, conditions: e.target.value})}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="e.g., Diabetes, Hypertension"
+                  placeholder="e.g., Diabetes, Hypertension (comma-separated)"
                 />
               </div>
             </div>
           ) : (
-            // Existing patient selection
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -175,6 +239,9 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
                     </option>
                   ))}
                 </select>
+                {availablePatients.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-1">No available patients to assign</p>
+                )}
               </div>
             </div>
           )}
@@ -189,8 +256,8 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              disabled={loading}
+              disabled={loading || (!isNewPatient && !selectedPatientId)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Adding...' : 'Add Patient'}
             </button>
@@ -201,6 +268,100 @@ const AddPatientModal: React.FC<AddPatientModalProps> = ({ onClose, onSubmit, on
   );
 };
 
+// Edit Patient Modal Component
+const EditPatientModal: React.FC<EditPatientModalProps> = ({ patient, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState<EditPatientFormData>({
+    name: patient?.name || '',
+    phone: patient?.phone || '',
+    conditions: Array.isArray(patient?.conditions) ? patient.conditions.join(', ') : ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await onSubmit(patient.id, {
+        ...formData,
+        conditions: formData.conditions.split(',').map(c => c.trim()).filter(c => c)
+      });
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to update patient');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Edit Patient</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+            <XIcon size={24} />
+          </button>
+        </div>
+        
+        {error && <ErrorMessage message={error} />}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Name</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Phone</label>
+            <input
+              type="tel"
+              required
+              value={formData.phone}
+              onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Medical Conditions</label>
+            <input
+              type="text"
+              value={formData.conditions}
+              onChange={(e) => setFormData({...formData, conditions: e.target.value})}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="e.g., Diabetes, Hypertension (comma-separated)"
+            />
+          </div>
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Updating...' : 'Update Patient'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Main CaregiverPatients Component
 const CaregiverPatients: React.FC = () => {
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +370,8 @@ const CaregiverPatients: React.FC = () => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<any>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
@@ -217,9 +380,11 @@ const CaregiverPatients: React.FC = () => {
 
   const loadPatients = async () => {
     try {
+      setLoading(true);
       const data = await caregiverService.getPatients();
       setPatients(data);
-    } catch (error) {
+      setError('');
+    } catch (error: any) {
       setError(error.response?.data?.message || 'Failed to load patients');
     } finally {
       setLoading(false);
@@ -231,8 +396,8 @@ const CaregiverPatients: React.FC = () => {
       const newPatient = await caregiverService.addPatient(patientData);
       setPatients([...patients, newPatient]);
       setIsAddModalOpen(false);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to add patient');
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to add patient');
     }
   };
 
@@ -241,8 +406,31 @@ const CaregiverPatients: React.FC = () => {
       const newPatient = await caregiverService.addExistingPatient(patientId);
       setPatients([...patients, newPatient]);
       setIsAddModalOpen(false);
-    } catch (error) {
-      setError(error.response?.data?.message || 'Failed to add patient');
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to add patient');
+    }
+  };
+
+  const handleEditPatient = async (patientId: string, updates: EditPatientFormData) => {
+    try {
+      await caregiverService.updatePatient(patientId, updates);
+      // Reload patients to get updated data
+      await loadPatients();
+      setIsEditModalOpen(false);
+      setEditingPatient(null);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update patient');
+    }
+  };
+
+  const handleDeletePatient = async (patientId: string) => {
+    if (window.confirm('Are you sure you want to remove this patient from your care? This action cannot be undone.')) {
+      try {
+        await caregiverService.deletePatient(patientId);
+        setPatients(patients.filter(p => p.id !== patientId));
+      } catch (error: any) {
+        setError(error.response?.data?.message || 'Failed to delete patient');
+      }
     }
   };
 
@@ -251,51 +439,30 @@ const CaregiverPatients: React.FC = () => {
     setIsViewModalOpen(true);
   };
 
+  const handleEditClick = (patient: any) => {
+    setEditingPatient(patient);
+    setIsEditModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsViewModalOpen(false);
     setSelectedPatient(null);
   };
 
-  const searchInPatient = (patient: any, searchTerm: string): boolean => {
-    const searchValue = searchTerm.toLowerCase();
-    const searchableFields = [
-      patient.name,
-      patient.email,
-      patient.phone,
-      patient.age?.toString(),
-      patient.id,
-      patient.status,
-      ...(patient.conditions || []),
-      patient.emergencyContact,
-      patient.emergencyPhone
-    ];
-
-    return searchableFields.some(field => 
-      field?.toLowerCase().includes(searchValue)
-    );
-  };
-
   // Enhanced search function
   const filteredPatients = patients.filter(patient => {
-    if (!patient) return false;
+    if (!patient || !searchTerm) return true;
     
     const searchTermLower = searchTerm.toLowerCase();
     return (
-      // Search by name
       (patient.name?.toLowerCase().includes(searchTermLower)) ||
-      // Search by email
       (patient.email?.toLowerCase().includes(searchTermLower)) ||
-      // Search by phone
       (patient.phone?.toLowerCase().includes(searchTermLower)) ||
-      // Search by age
       (patient.age?.toString().includes(searchTerm)) ||
-      // Search by conditions
-      (patient.conditions?.some(condition => 
+      (patient.conditions?.some((condition: string) => 
         condition.toLowerCase().includes(searchTermLower)
       )) ||
-      // Search by status
       (patient.status?.toLowerCase().includes(searchTermLower)) ||
-      // Search by ID
       (patient.id?.toLowerCase().includes(searchTermLower))
     );
   });
@@ -325,10 +492,11 @@ const CaregiverPatients: React.FC = () => {
   };
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} />;
 
   return (
     <div>
+      {error && <ErrorMessage message={error} />}
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">My Patients</h1>
@@ -338,10 +506,10 @@ const CaregiverPatients: React.FC = () => {
         </div>
         <button 
           onClick={() => setIsAddModalOpen(true)} 
-          className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
+          className="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
         >
           <PlusIcon size={18} className="mr-1" />
-          Add New Patient
+          Add Patient
         </button>
       </div>
 
@@ -353,7 +521,7 @@ const CaregiverPatients: React.FC = () => {
           </div>
           <input 
             type="text" 
-            placeholder="Search patients by name, email, phone, age, conditions..." 
+            placeholder="Search patients by name, email, phone, conditions..." 
             value={searchTerm} 
             onChange={handleSearchInput}
             className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -389,7 +557,7 @@ const CaregiverPatients: React.FC = () => {
                 Contact
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Medications
+                Health Status
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
@@ -401,7 +569,7 @@ const CaregiverPatients: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredPatients.map(patient => (
-              <tr key={patient.id}>
+              <tr key={patient.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="bg-blue-100 p-2 rounded-full mr-3">
@@ -422,7 +590,7 @@ const CaregiverPatients: React.FC = () => {
                     <PhoneIcon size={14} className="text-gray-400 mr-1" />
                     {patient.phone}
                   </div>
-                  <div className="text-sm text-gray-500 flex items-center">
+                  <div className="text-sm text-gray-500 flex items-center mt-1">
                     <MailIcon size={14} className="text-gray-400 mr-1" />
                     {patient.email}
                   </div>
@@ -430,33 +598,63 @@ const CaregiverPatients: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-900">
                     <PillIcon size={14} className="text-gray-400 mr-1" />
-                    <span>{patient.medications} medications</span>
+                    <span>{patient.medications || 0} medications</span>
                   </div>
+                  {patient.conditions && patient.conditions.length > 0 && (
+                    <div className="mt-1">
+                      <div className="text-xs text-gray-500 flex items-center">
+                        <HeartIcon size={12} className="text-red-400 mr-1" />
+                        {patient.conditions.slice(0, 2).join(', ')}
+                        {patient.conditions.length > 2 && ` +${patient.conditions.length - 2} more`}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-1">
                     <div className="text-xs text-gray-500">
-                      Adherence: {patient.adherence}%
+                      Adherence: {patient.adherence || 0}%
                     </div>
                     <div className="w-24 bg-gray-200 rounded-full h-2 mt-1">
-                      <div className={`h-2 rounded-full ${patient.adherence > 90 ? 'bg-green-500' : patient.adherence > 75 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{
-                    width: `${patient.adherence}%`
-                  }}></div>
+                      <div 
+                        className={`h-2 rounded-full ${
+                          (patient.adherence || 0) > 90 ? 'bg-green-500' : 
+                          (patient.adherence || 0) > 75 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`} 
+                        style={{ width: `${patient.adherence || 0}%` }}
+                      ></div>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.status === 'stable' ? 'bg-green-100 text-green-800' : patient.status === 'attention' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                    {patient.status === 'stable' ? 'Stable' : patient.status === 'attention' ? 'Needs Attention' : 'Critical'}
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    patient.status === 'stable' ? 'bg-green-100 text-green-800' : 
+                    patient.status === 'attention' ? 'bg-yellow-100 text-yellow-800' : 
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {patient.status === 'stable' ? 'Stable' : 
+                     patient.status === 'attention' ? 'Needs Attention' : 'Critical'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex justify-end space-x-2">
-                    <button onClick={() => handleViewDetails(patient)} className="text-blue-600 hover:text-blue-800" title="View Details">
+                    <button 
+                      onClick={() => handleViewDetails(patient)} 
+                      className="text-blue-600 hover:text-blue-800" 
+                      title="View Details"
+                    >
                       <ClipboardCheckIcon size={18} />
                     </button>
-                    <button className="text-gray-600 hover:text-gray-800" title="Edit Patient">
+                    <button 
+                      onClick={() => handleEditClick(patient)}
+                      className="text-gray-600 hover:text-gray-800" 
+                      title="Edit Patient"
+                    >
                       <EditIcon size={18} />
                     </button>
-                    <button className="text-red-600 hover:text-red-800" title="Remove Patient">
+                    <button 
+                      onClick={() => handleDeletePatient(patient.id)}
+                      className="text-red-600 hover:text-red-800" 
+                      title="Remove Patient"
+                    >
                       <TrashIcon size={18} />
                     </button>
                   </div>
@@ -467,23 +665,47 @@ const CaregiverPatients: React.FC = () => {
         </table>
 
         {filteredPatients.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            No patients found matching your search criteria.
+          <div className="text-center py-12">
+            {searchTerm ? (
+              <div>
+                <SearchIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No patients found</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  No patients match your search criteria.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No patients</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Get started by adding your first patient.
+                </p>
+                <div className="mt-6">
+                  <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
+                    Add Patient
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* Patient Detail Modal */}
-      {isViewModalOpen && selectedPatient && <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+      {isViewModalOpen && selectedPatient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
                 Patient Details
               </h3>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-500">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XIcon size={24} />
               </button>
             </div>
             <div className="space-y-6">
@@ -501,6 +723,7 @@ const CaregiverPatients: React.FC = () => {
                   </p>
                 </div>
               </div>
+              
               <div className="border-t border-gray-200 pt-4">
                 <h4 className="font-medium mb-3">Contact Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -514,36 +737,45 @@ const CaregiverPatients: React.FC = () => {
                   </div>
                 </div>
               </div>
+              
               <div className="border-t border-gray-200 pt-4">
                 <h4 className="font-medium mb-3">Medical Information</h4>
                 <div className="space-y-3">
                   <div>
                     <span className="text-gray-500">Medical Conditions:</span>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {selectedPatient.conditions.map((condition: string, index: number) => <span key={index} className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+                      {selectedPatient.conditions && selectedPatient.conditions.length > 0 ? (
+                        selectedPatient.conditions.map((condition: string, index: number) => (
+                          <span key={index} className="px-2 py-1 bg-red-100 text-red-800 text-sm rounded-full">
                             {condition}
-                          </span>)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400">No conditions recorded</span>
+                      )}
                     </div>
                   </div>
                   <div>
                     <span className="text-gray-500">Medications:</span>
                     <div className="flex items-center mt-1">
                       <PillIcon size={16} className="text-blue-600 mr-1" />
-                      <span>
-                        {selectedPatient.medications} active medications
-                      </span>
+                      <span>{selectedPatient.medications || 0} active medications</span>
                     </div>
                   </div>
                   <div>
                     <span className="text-gray-500">Adherence Rate:</span>
                     <div className="flex items-center mt-1">
-                      <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
-                        <div className={`h-2 rounded-full ${selectedPatient.adherence > 90 ? 'bg-green-500' : selectedPatient.adherence > 75 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{
-                      width: `${selectedPatient.adherence}%`
-                    }}></div>
+                      <div className="w-32 bg-gray-200 rounded-full h-3 mr-3">
+                        <div 
+                          className={`h-3 rounded-full ${
+                            (selectedPatient.adherence || 0) > 90 ? 'bg-green-500' : 
+                            (selectedPatient.adherence || 0) > 75 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`} 
+                          style={{ width: `${selectedPatient.adherence || 0}%` }}
+                        ></div>
                       </div>
                       <span className="font-medium">
-                        {selectedPatient.adherence}%
+                        {selectedPatient.adherence || 0}%
                       </span>
                     </div>
                   </div>
@@ -551,21 +783,41 @@ const CaregiverPatients: React.FC = () => {
               </div>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
-              <button onClick={closeModal} className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button 
+                onClick={closeModal} 
+                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
                 Close
               </button>
-              <button className="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700">
-                View Full Profile
+              <button 
+                onClick={() => handleEditClick(selectedPatient)}
+                className="bg-blue-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Edit Patient
               </button>
             </div>
           </div>
-        </div>}
+        </div>
+      )}
+
       {/* Add Patient Modal */}
       {isAddModalOpen && (
         <AddPatientModal
           onClose={() => setIsAddModalOpen(false)}
           onSubmit={handleAddPatient}
           onExistingPatientSubmit={handleAddExistingPatient}
+        />
+      )}
+
+      {/* Edit Patient Modal */}
+      {isEditModalOpen && editingPatient && (
+        <EditPatientModal
+          patient={editingPatient}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setEditingPatient(null);
+          }}
+          onSubmit={handleEditPatient}
         />
       )}
     </div>

@@ -20,23 +20,28 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/caregiver', caregiverRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api', medicationRoutes);
 app.use('/api', reminderRoutes);
-app.use('/api/caregiver', prescriptionRoutes);
+app.use('/api/caregiver/prescriptions', prescriptionRoutes); // Mount prescription routes correctly
 app.use('/api', noteRoutes);
 app.use('/api/admin', adminRoutes);
-app.use(errorHandler);
 
 // Enable file uploads directory
 app.use('/uploads', express.static('uploads'));
+
+// Error handling middleware
+app.use(errorHandler);
 
 // Basic route
 app.get('/', (req, res) => {
   res.send('API is running...');
 });
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
